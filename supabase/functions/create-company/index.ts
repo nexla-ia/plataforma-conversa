@@ -106,18 +106,45 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 1) Inserir company (simplificado para teste)
-    const { error: insErr } = await admin.from("companies").insert({
+    // Cliente admin com service role para criar usuário e inserir
+    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // 1) Criar usuário no auth.users
+    const { data: newUserData, error: signUpError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (signUpError || !newUserData.user) {
+      return new Response(
+        JSON.stringify({ error: `Erro ao criar usuário: ${signUpError?.message || 'Usuário não retornado'}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const newUserId = newUserData.user.id;
+
+    // 2) Inserir empresa com o user_id do novo usuário
+    const { error: insErr } = await adminClient.from("companies").insert({
       name,
       phone_number,
       api_key,
       email,
-      user_id: callerId, // Usar o user_id do caller
+      user_id: newUserId,
       is_super_admin: false,
     });
 
     if (insErr) {
-      return new Response(JSON.stringify({ error: insErr.message }), {
+      // Tentar deletar o usuário criado se houver erro
+      await adminClient.auth.admin.deleteUser(newUserId);
+
+      return new Response(JSON.stringify({ error: `Erro ao inserir empresa: ${insErr.message}` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -126,7 +153,8 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         ok: true,
-        company: { name, email, phone_number, api_key, user_id: callerId },
+        company: { name, email, phone_number, api_key, user_id: newUserId },
+        message: "Empresa e usuário criados com sucesso",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
