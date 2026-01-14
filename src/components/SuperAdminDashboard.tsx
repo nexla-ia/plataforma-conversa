@@ -3,6 +3,19 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase, Company } from "../lib/supabase";
 import { LogOut, Plus, Building, RefreshCw } from "lucide-react";
 
+const generateApiKey = () => {
+  return crypto.randomUUID().toUpperCase().replace(/-/g, '');
+};
+
+const generatePassword = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*';
+  let password = '';
+  for (let i = 0; i < 16; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
 export default function SuperAdminDashboard() {
   const { signOut, user } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -14,9 +27,6 @@ export default function SuperAdminDashboard() {
     password: "",
     name: "",
     phone_number: "",
-    api_key: "",
-    createUser: true,
-    user_id: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -45,41 +55,30 @@ export default function SuperAdminDashboard() {
     setError(null);
 
     try {
-      let userId = formData.user_id;
+      const password = formData.password || generatePassword();
+      const apiKey = generateApiKey();
 
-      if (formData.createUser) {
-        // Tentar criar usuário
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-        });
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: password,
+      });
 
-        if (signUpError) {
-          if (signUpError.message.includes("User already registered")) {
-            throw new Error("Usuário já existe. Desmarque 'Criar novo usuário' e insira o User ID manualmente.");
-          }
-          throw signUpError;
-        }
-
-        if (!signUpData.user) throw new Error("Falha ao criar usuário");
-
-        userId = signUpData.user.id;
-
-        // Confirmar email automaticamente
-        await supabase.rpc('confirm_user_email', { user_id: userId }).catch(() => {
-          // Silenciosamente ignorar erro
-        });
+      if (signUpError) {
+        throw new Error(signUpError.message);
       }
 
-      // Inserir empresa
-      const { data, error } = await supabase
+      if (!signUpData.user) throw new Error("Falha ao criar usuário");
+
+      await supabase.rpc('confirm_user_email', { user_id: signUpData.user.id }).catch(() => {});
+
+      const { error } = await supabase
         .from("companies")
         .insert({
           name: formData.name,
           email: formData.email,
           phone_number: formData.phone_number,
-          api_key: formData.api_key,
-          user_id: userId,
+          api_key: apiKey,
+          user_id: signUpData.user.id,
           is_super_admin: false,
         })
         .select()
@@ -87,7 +86,7 @@ export default function SuperAdminDashboard() {
 
       if (error) throw error;
 
-      setFormData({ email: "", password: "", name: "", phone_number: "", api_key: "", createUser: true, user_id: "" });
+      setFormData({ email: "", password: "", name: "", phone_number: "" });
       setShowCreateForm(false);
       fetchCompanies();
     } catch (error: any) {
@@ -178,81 +177,94 @@ export default function SuperAdminDashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Criar Nova Empresa</h2>
-            {error && <p className="text-red-500 mb-4">{error}</p>}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
             <form onSubmit={handleCreateCompany} className="space-y-4">
-              <input
-                type="email"
-                placeholder="Email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Senha"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-              />
-              <label className="flex items-center">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email *
+                </label>
                 <input
-                  type="checkbox"
-                  checked={formData.createUser}
-                  onChange={(e) => setFormData({ ...formData, createUser: e.target.checked })}
-                  className="mr-2"
+                  type="email"
+                  placeholder="empresa@exemplo.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
                 />
-                Criar novo usuário com este email
-              </label>
-              {!formData.createUser && (
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Senha (opcional)
+                </label>
+                <input
+                  type="password"
+                  placeholder="Deixe vazio para gerar automaticamente"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Uma senha forte será gerada automaticamente se não fornecida
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nome da Empresa *
+                </label>
                 <input
                   type="text"
-                  placeholder="User ID (do usuário existente)"
-                  value={formData.user_id || ""}
-                  onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  required={!formData.createUser}
+                  placeholder="Nome da Empresa"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
                 />
-              )}
-              <input
-                type="text"
-                placeholder="Nome da Empresa"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Telefone"
-                value={formData.phone_number}
-                onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                required
-              />
-              <input
-                type="text"
-                placeholder="API Key"
-                value={formData.api_key}
-                onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                required
-              />
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 bg-emerald-500 text-white py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50"
-                >
-                  {creating ? "Criando..." : "Criar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateForm(false)}
-                  className="flex-1 bg-slate-300 text-slate-700 py-2 rounded-lg hover:bg-slate-400"
-                >
-                  Cancelar
-                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Telefone *
+                </label>
+                <input
+                  type="text"
+                  placeholder="(00) 00000-0000"
+                  value={formData.phone_number}
+                  onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <p className="text-xs text-slate-500 mb-3">
+                  Uma API Key única será gerada automaticamente para esta empresa
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="flex-1 bg-emerald-500 text-white py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+                  >
+                    {creating ? "Criando..." : "Criar Empresa"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setError(null);
+                      setFormData({ email: "", password: "", name: "", phone_number: "" });
+                    }}
+                    className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-lg hover:bg-slate-300 transition font-medium"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </form>
           </div>
