@@ -63,7 +63,10 @@ Deno.serve(async (req: Request) => {
 
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Invalid user session" }), {
+      return new Response(JSON.stringify({ 
+        error: "Invalid user session",
+        details: userErr?.message || "No user data returned"
+      }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -79,7 +82,10 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (saErr || !saRow) {
-      return new Response(JSON.stringify({ error: "Not allowed" }), {
+      return new Response(JSON.stringify({ 
+        error: "Not allowed",
+        details: saErr?.message || "User is not a super admin"
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
