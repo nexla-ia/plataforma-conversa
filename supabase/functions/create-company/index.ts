@@ -10,24 +10,11 @@ const corsHeaders = {
 
 type Payload = {
   email: string;
-  password?: string;
+  password: string;
   name: string;
   phone_number: string;
-  api_key?: string;
+  api_key: string;
 };
-
-function generateApiKey(): string {
-  return crypto.randomUUID().toUpperCase().replace(/-/g, '');
-}
-
-function generatePassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*';
-  let password = '';
-  for (let i = 0; i < 16; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-}
 
 Deno.serve(async (req: Request) => {
   // ✅ Preflight CORS
@@ -101,13 +88,15 @@ Deno.serve(async (req: Request) => {
     const body: Partial<Payload> = await req.json().catch(() => ({}));
 
     const email = String(body.email ?? "").trim().toLowerCase();
+    const password = String(body.password ?? "").trim();
     const name = String(body.name ?? "").trim();
     const phone_number = String(body.phone_number ?? "").trim();
+    const api_key = String(body.api_key ?? "").trim();
 
-    if (!email || !name || !phone_number) {
+    if (!email || !password || !name || !phone_number || !api_key) {
       return new Response(
         JSON.stringify({
-          error: "Campos obrigatórios: email, name, phone_number",
+          error: "Campos obrigatórios: email, password, name, phone_number, api_key",
         }),
         {
           status: 400,
@@ -115,9 +104,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    const password = body.password && body.password.trim() ? body.password.trim() : generatePassword();
-    const api_key = body.api_key && body.api_key.trim() ? body.api_key.trim() : generateApiKey();
 
     // Cliente admin com service role para criar usuário e inserir
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {

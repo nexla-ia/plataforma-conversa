@@ -14,6 +14,7 @@ export default function SuperAdminDashboard() {
     password: "",
     name: "",
     phone_number: "",
+    api_key: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -64,9 +65,10 @@ export default function SuperAdminDashboard() {
         },
         body: JSON.stringify({
           email: formData.email,
-          password: formData.password || undefined,
+          password: formData.password,
           name: formData.name,
           phone_number: formData.phone_number,
+          api_key: formData.api_key,
         }),
       });
 
@@ -76,7 +78,7 @@ export default function SuperAdminDashboard() {
         throw new Error(result.error || "Erro ao criar empresa");
       }
 
-      setFormData({ email: "", password: "", name: "", phone_number: "" });
+      setFormData({ email: "", password: "", name: "", phone_number: "", api_key: "" });
       setShowCreateForm(false);
       fetchCompanies();
     } catch (error: any) {
@@ -201,18 +203,16 @@ export default function SuperAdminDashboard() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Senha (opcional)
+                  Senha *
                 </label>
                 <input
                   type="password"
-                  placeholder="Deixe vazio para gerar automaticamente"
+                  placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
                 />
-                <p className="text-xs text-slate-500 mt-1">
-                  Uma senha forte será gerada automaticamente se não fornecida
-                </p>
               </div>
 
               <div>
@@ -243,10 +243,21 @@ export default function SuperAdminDashboard() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  API Key *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Chave de API única"
+                  value={formData.api_key}
+                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
               <div className="pt-2 border-t border-slate-200">
-                <p className="text-xs text-slate-500 mb-3">
-                  Uma API Key única será gerada automaticamente para esta empresa
-                </p>
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -260,7 +271,7 @@ export default function SuperAdminDashboard() {
                     onClick={() => {
                       setShowCreateForm(false);
                       setError(null);
-                      setFormData({ email: "", password: "", name: "", phone_number: "" });
+                      setFormData({ email: "", password: "", name: "", phone_number: "", api_key: "" });
                     }}
                     className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-lg hover:bg-slate-300 transition font-medium"
                   >
