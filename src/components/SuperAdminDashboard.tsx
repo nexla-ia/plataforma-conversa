@@ -67,7 +67,7 @@ export default function SuperAdminDashboard() {
 
         // Confirmar email automaticamente
         await supabase.rpc('confirm_user_email', { user_id: userId }).catch(() => {
-          console.log("Função confirm_user_email não existe ou falhou");
+          // Silenciosamente ignorar erro
         });
       }
 
@@ -91,7 +91,6 @@ export default function SuperAdminDashboard() {
       setShowCreateForm(false);
       fetchCompanies();
     } catch (error: any) {
-      console.error("Erro ao criar empresa:", error);
       setError(error.message || "Erro ao criar empresa");
     } finally {
       setCreating(false);
@@ -159,7 +158,9 @@ export default function SuperAdminDashboard() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">{company.name}</h3>
                   <p className="text-slate-600">{company.email}</p>
-                  <p className="text-sm text-slate-500">API Key: {company.api_key}</p>
+                  <p className="text-sm text-slate-500">
+                    API Key: {company.api_key.slice(0, 8)}...{company.api_key.slice(-4)}
+                  </p>
                   <p className="text-sm text-slate-500">Telefone: {company.phone_number}</p>
                 </div>
                 <div className="text-right">
