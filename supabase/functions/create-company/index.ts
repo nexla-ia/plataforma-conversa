@@ -74,15 +74,20 @@ Deno.serve(async (req: Request) => {
 
     const callerId = userData.user.id;
 
-    // ✅ Check super admin via tabela super_admins (recomendado)
-    const { data: saRow, error: saErr } = await userClient
+    // Cliente admin para verificar super admin (bypassa RLS)
+    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    // ✅ Check super admin via tabela super_admins usando service role
+    const { data: saRow, error: saErr } = await adminClient
       .from("super_admins")
       .select("user_id")
       .eq("user_id", callerId)
       .maybeSingle();
 
     if (saErr || !saRow) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Not allowed",
         details: saErr?.message || "User is not a super admin"
       }), {
@@ -110,11 +115,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    // Cliente admin com service role para criar usuário e inserir
-    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
 
     // 1) Criar usuário no auth.users
     const { data: newUserData, error: signUpError } = await adminClient.auth.admin.createUser({
