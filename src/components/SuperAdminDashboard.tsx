@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase, Company } from "../lib/supabase";
 import { LogOut, Plus, Building, RefreshCw } from "lucide-react";
@@ -31,23 +31,30 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    fetchCompanies();
+  const fetchCompanies = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setError(`Erro ao carregar empresas: ${error.message}`);
+      } else if (data) {
+        setCompanies(data);
+      }
+    } catch (err: any) {
+      setError(`Erro ao carregar empresas: ${err.message}`);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const fetchCompanies = async () => {
-    setRefreshing(true);
-    const { data, error } = await supabase
-      .from("companies")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setCompanies(data);
-    }
-    setLoading(false);
-    setRefreshing(false);
-  };
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
 
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,26 +157,38 @@ export default function SuperAdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && !showCreateForm && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
         <div className="grid gap-6">
-          {companies.map((company) => (
-            <div key={company.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">{company.name}</h3>
-                  <p className="text-slate-600">{company.email}</p>
-                  <p className="text-sm text-slate-500">
-                    API Key: {company.api_key.slice(0, 8)}...{company.api_key.slice(-4)}
-                  </p>
-                  <p className="text-sm text-slate-500">Telefone: {company.phone_number}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-slate-500">
-                    Criado em: {new Date(company.created_at).toLocaleDateString('pt-BR')}
-                  </p>
+          {companies.length === 0 && !error ? (
+            <div className="text-center py-12">
+              <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500">Nenhuma empresa cadastrada</p>
+            </div>
+          ) : (
+            companies.map((company) => (
+              <div key={company.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">{company.name}</h3>
+                    <p className="text-slate-600">{company.email}</p>
+                    <p className="text-sm text-slate-500">
+                      API Key: {company.api_key.slice(0, 8)}...{company.api_key.slice(-4)}
+                    </p>
+                    <p className="text-sm text-slate-500">Telefone: {company.phone_number}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-slate-500">
+                      Criado em: {new Date(company.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </main>
 
