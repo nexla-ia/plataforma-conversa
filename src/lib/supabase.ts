@@ -10,6 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export interface Company {
+  id: string;
   api_key: string;
   name: string;
   phone_number: string;
