@@ -1,289 +1,335 @@
-import { useEffect, useState, useCallback } from "react";
-import { useAuth } from "../contexts/AuthContext";
-import { supabase, Company } from "../lib/supabase";
-import { LogOut, Plus, Building, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase"; // ✅ ajuste o caminho se necessário
+
+type Company = {
+  api_key: string;
+  name: string;
+  phone_number: string;
+  email: string;
+  user_id: string | null;
+  is_super_admin?: boolean | null;
+  created_at?: string;
+};
 
 export default function SuperAdminDashboard() {
-  const { signOut, user } = useAuth();
+  const [userEmail, setUserEmail] = useState("");
+  const [userId, setUserId] = useState("");
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    name: "",
-    phone_number: "",
-    api_key: "",
-  });
-  const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fetchCompanies = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const { data, error } = await supabase
-        .from("companies")
-        .select("*")
-        .order("created_at", { ascending: false });
+  const [showForm, setShowForm] = useState(false);
 
-      if (error) {
-        setError(`Erro ao carregar empresas: ${error.message}`);
-      } else if (data) {
-        setCompanies(data);
+  // form
+  const [name, setName] = useState("");
+  const [phone_number, setPhoneNumber] = useState("");
+  const [api_key, setApiKey] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // =========================
+  // Load user + companies
+  // =========================
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setErrorMsg(null);
+
+      const {
+        data: { session },
+        error: sessErr,
+      } = await supabase.auth.getSession();
+
+      if (sessErr) {
+        setErrorMsg(sessErr.message);
+        setLoading(false);
+        return;
       }
-    } catch (err: any) {
-      setError(`Erro ao carregar empresas: ${err.message}`);
-    } finally {
+
+      if (!session?.user) {
+        setErrorMsg("Sem sessão. Faça login novamente.");
+        setLoading(false);
+        return;
+      }
+
+      setUserEmail(session.user.email ?? "");
+      setUserId(session.user.id);
+
+      await loadCompanies(session.user.id);
       setLoading(false);
-      setRefreshing(false);
-    }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
+  const loadCompanies = async (uid?: string) => {
+    setErrorMsg(null);
 
+    const query = supabase
+      .from("companies")
+      .select("api_key,name,phone_number,email,user_id,is_super_admin,created_at")
+      .order("created_at", { ascending: false });
+
+    // Se você quiser listar só as empresas do usuário logado:
+    if (uid) query.eq("user_id", uid);
+
+    const { data, error } = await query;
+
+    if (error) {
+      setErrorMsg(error.message);
+      setCompanies([]);
+      return;
+    }
+
+    setCompanies((data as Company[]) || []);
+  };
+
+  // =========================
+  // Create company
+  // =========================
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    if (
+      !name.trim() ||
+      !phone_number.trim() ||
+      !api_key.trim() ||
+      !email.trim() ||
+      !password.trim()
+    ) {
+      setErrorMsg("Preencha todos os campos.");
+      return;
+    }
+
     setCreating(true);
-    setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("Sessão não encontrada");
+      const {
+        data: { session },
+        error: sessErr,
+      } = await supabase.auth.getSession();
+
+      if (sessErr) throw sessErr;
+      if (!session?.access_token) {
+        throw new Error("Sem token. Faça login novamente.");
       }
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-company`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
+      // ✅ CHAMADA COM BEARER (resolve 401 quando faltava auth)
+      const { data, error } = await supabase.functions.invoke("create-company", {
+        body: {
+          email: email.trim().toLowerCase(),
+          password,
+          name: name.trim(),
+          phone_number: phone_number.trim(),
+          api_key: api_key.trim(),
         },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          phone_number: formData.phone_number,
-          api_key: formData.api_key,
-        }),
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Erro ao criar empresa");
+      if (error) {
+        console.error("Erro create-company:", error);
+        throw new Error(error.message || "Erro ao criar empresa.");
       }
 
-      setFormData({ email: "", password: "", name: "", phone_number: "", api_key: "" });
-      setShowCreateForm(false);
-      fetchCompanies();
-    } catch (error: any) {
-      setError(error.message || "Erro ao criar empresa");
+      console.log("Empresa criada:", data);
+
+      // limpa e fecha
+      setShowForm(false);
+      setName("");
+      setPhoneNumber("");
+      setApiKey("");
+      setEmail("");
+      setPassword("");
+
+      // recarrega lista
+      setLoading(true);
+      await loadCompanies(session.user.id);
+      setLoading(false);
+    } catch (err: any) {
+      console.error("handleCreateCompany:", err);
+      setErrorMsg(err?.message ?? "Erro inesperado.");
     } finally {
       setCreating(false);
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
+
+  // =========================
+  // UI
+  // =========================
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mx-auto mb-2" />
-          <p className="text-slate-600">Carregando empresas...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-slate-600">Carregando...</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-500 p-2 rounded-lg">
-                <Building className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-800">Super Admin</h1>
-                <p className="text-sm text-slate-600">Gerenciamento de Empresas</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"
-              >
-                <Plus className="w-4 h-4" />
-                Criar Empresa
-              </button>
-              <button
-                onClick={() => fetchCompanies()}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Atualizar
-              </button>
-              <button
-                onClick={signOut}
-                className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition"
-              >
-                <LogOut className="w-4 h-4" />
-                Sair
-              </button>
-            </div>
+      <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
+        <div>
+          <div className="text-lg font-semibold text-slate-900">Super Admin</div>
+          <div className="text-sm text-slate-500">Gerenciamento de Empresas</div>
+          <div className="text-xs text-slate-400 mt-1">
+            {userEmail} • {userId}
           </div>
         </div>
+
+        <button
+          onClick={handleLogout}
+          className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100"
+        >
+          Sair
+        </button>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && !showCreateForm && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">{error}</p>
+      <main className="px-6 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-slate-900">Empresas Cadastradas</h2>
+
+          <button
+            onClick={() => setShowForm(true)}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700"
+          >
+            + Nova Empresa
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorMsg}
           </div>
         )}
-        <div className="grid gap-6">
-          {companies.length === 0 && !error ? (
-            <div className="text-center py-12">
-              <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500">Nenhuma empresa cadastrada</p>
-            </div>
-          ) : (
-            companies.map((company) => (
-              <div key={company.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800">{company.name}</h3>
-                    <p className="text-slate-600">{company.email}</p>
-                    <p className="text-sm text-slate-500">
-                      API Key: {company.api_key.slice(0, 8)}...{company.api_key.slice(-4)}
-                    </p>
-                    <p className="text-sm text-slate-500">Telefone: {company.phone_number}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-slate-500">
-                      Criado em: {new Date(company.created_at).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
+
+        {showForm && (
+          <div className="mb-6 rounded-xl bg-white border border-slate-200 p-4">
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">
+              Cadastrar Nova Empresa
+            </h3>
+
+            <form onSubmit={handleCreateCompany} className="grid gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">
+                    Nome da Empresa
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Minha Empresa"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">
+                    Número de Telefone
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    value={phone_number}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="(69) 99999-9999"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">
+                    Chave API
+                  </label>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    value={api_key}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="UUID/chave"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="empresa@dominio.com"
+                  />
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </main>
-
-      {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Criar Nova Empresa</h2>
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-700 text-sm">{error}</p>
-              </div>
-            )}
-            <form onSubmit={handleCreateCompany} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  placeholder="empresa@exemplo.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Senha *
+                <label className="block text-sm text-slate-700 mb-1">
+                  Senha
                 </label>
                 <input
                   type="password"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="********"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nome da Empresa *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nome da Empresa"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {creating ? "Cadastrando..." : "Cadastrar Empresa"}
+                </button>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Telefone *
-                </label>
-                <input
-                  type="text"
-                  placeholder="(00) 00000-0000"
-                  value={formData.phone_number}
-                  onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  API Key *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Chave de API única"
-                  value={formData.api_key}
-                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-
-              <div className="pt-2 border-t border-slate-200">
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={creating}
-                    className="flex-1 bg-emerald-500 text-white py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
-                  >
-                    {creating ? "Criando..." : "Criar Empresa"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setError(null);
-                      setFormData({ email: "", password: "", name: "", phone_number: "", api_key: "" });
-                    }}
-                    className="flex-1 bg-slate-200 text-slate-700 py-2 rounded-lg hover:bg-slate-300 transition font-medium"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
               </div>
             </form>
           </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {companies.length === 0 && (
+            <div className="text-slate-500">Nenhuma empresa cadastrada.</div>
+          )}
+
+          {companies.map((c) => (
+            <div
+              key={c.api_key} // ✅ key única
+              className="rounded-xl bg-white border border-slate-200 p-4"
+            >
+              <div className="flex items-start justify-between">
+                <div className="text-lg font-semibold text-slate-900">{c.name}</div>
+                {c.is_super_admin ? (
+                  <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">
+                    Admin
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-3 text-sm text-slate-600 space-y-1">
+                <div>📞 {c.phone_number}</div>
+                <div>✉️ {c.email}</div>
+                <div className="break-all">🔑 {c.api_key}</div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </main>
     </div>
   );
 }
