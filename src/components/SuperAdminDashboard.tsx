@@ -3,19 +3,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase, Company } from "../lib/supabase";
 import { LogOut, Plus, Building, RefreshCw } from "lucide-react";
 
-const generateApiKey = () => {
-  return crypto.randomUUID().toUpperCase().replace(/-/g, '');
-};
-
-const generatePassword = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*';
-  let password = '';
-  for (let i = 0; i < 16; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-};
-
 export default function SuperAdminDashboard() {
   const { signOut, user } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -62,36 +49,32 @@ export default function SuperAdminDashboard() {
     setError(null);
 
     try {
-      const password = formData.password || generatePassword();
-      const apiKey = generateApiKey();
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: password,
-      });
-
-      if (signUpError) {
-        throw new Error(signUpError.message);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Sessão não encontrada");
       }
 
-      if (!signUpData.user) throw new Error("Falha ao criar usuário");
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-company`;
 
-      await supabase.rpc('confirm_user_email', { user_id: signUpData.user.id }).catch(() => {});
-
-      const { error } = await supabase
-        .from("companies")
-        .insert({
-          name: formData.name,
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           email: formData.email,
+          password: formData.password || undefined,
+          name: formData.name,
           phone_number: formData.phone_number,
-          api_key: apiKey,
-          user_id: signUpData.user.id,
-          is_super_admin: false,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Erro ao criar empresa");
+      }
 
       setFormData({ email: "", password: "", name: "", phone_number: "" });
       setShowCreateForm(false);
