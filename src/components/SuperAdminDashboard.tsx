@@ -117,6 +117,14 @@ export default function SuperAdminDashboard() {
       }
 
       // ✅ CHAMADA COM BEARER (resolve 401 quando faltava auth)
+      const {
+  data: { session },
+  error: sessErr,
+} = await supabase.auth.getSession();
+
+console.log("SESSION:", session);
+console.log("ACCESS_TOKEN:", session?.access_token?.slice(0, 30));
+
       const { data, error } = await supabase.functions.invoke("create-company", {
         body: {
           email: email.trim().toLowerCase(),
