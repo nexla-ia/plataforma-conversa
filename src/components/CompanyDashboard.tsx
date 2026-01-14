@@ -1,16 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, Image, FileText, User, Clock, Phone, RefreshCw } from 'lucide-react';
+import { MessageSquare, LogOut, Image, FileText, User, Clock, Phone, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchMessages = useCallback(async () => {
+    if (!company) {
+      setLoading(false);
+      return;
+    }
+
+    setRefreshing(true);
+    setError(null);
+
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setRefreshing(false);
+      setError('Tempo esgotado ao carregar mensagens');
+    }, 10000);
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('apikey_instancia', company.api_key)
+        .order('created_at', { ascending: false });
+
+      clearTimeout(timeout);
+
+      if (error) {
+        setError(`Erro ao carregar mensagens: ${error.message}`);
+      } else if (data) {
+        setMessages(data);
+      }
+    } catch (err: any) {
+      clearTimeout(timeout);
+      setError(`Erro ao carregar mensagens: ${err.message}`);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [company]);
 
   useEffect(() => {
     fetchMessages();
+
+    if (!company?.api_key) return;
 
     const channel = supabase
       .channel('messages-changes')
@@ -20,7 +61,7 @@ export default function CompanyDashboard() {
           event: '*',
           schema: 'public',
           table: 'messages',
-          filter: `apikey_instancia=eq.${company?.api_key}`,
+          filter: `apikey_instancia=eq.${company.api_key}`,
         },
         () => {
           fetchMessages();
@@ -31,24 +72,7 @@ export default function CompanyDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [company?.api_key]);
-
-  const fetchMessages = async () => {
-    if (!company) return;
-
-    setRefreshing(true);
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('apikey_instancia', company.api_key)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setMessages(data);
-    }
-    setLoading(false);
-    setRefreshing(false);
-  };
+  }, [company?.api_key, fetchMessages]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -65,12 +89,48 @@ export default function CompanyDashboard() {
     return <MessageSquare className="w-4 h-4" />;
   };
 
-  if (loading) {
+  if (loading && !error) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mx-auto mb-2" />
           <p className="text-slate-600">Carregando mensagens...</p>
+          <button
+            onClick={signOut}
+            className="mt-4 text-sm text-slate-500 hover:text-slate-700 underline"
+          >
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && messages.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Erro ao Carregar</h2>
+            <p className="text-slate-600 mb-6">{error}</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={fetchMessages}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Tentar Novamente
+              </button>
+              <button
+                onClick={signOut}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition"
+              >
+                <LogOut className="w-4 h-4" />
+                Sair
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -112,6 +172,21 @@ export default function CompanyDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-700">{error}</p>
+            </div>
+            <button
+              onClick={fetchMessages}
+              className="text-sm text-red-700 hover:text-red-800 underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-4 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -132,7 +207,17 @@ export default function CompanyDashboard() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
             <MessageSquare className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-slate-800 mb-2">Nenhuma mensagem encontrada</h3>
-            <p className="text-slate-600">As mensagens do WhatsApp aparecerão aqui quando chegarem</p>
+            <p className="text-slate-600 mb-6">As mensagens do WhatsApp aparecerão aqui quando chegarem</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={fetchMessages}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
