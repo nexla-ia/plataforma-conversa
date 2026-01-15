@@ -25,6 +25,8 @@ export default function CompanyDashboard() {
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageModalSrc, setImageModalSrc] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -95,6 +97,16 @@ export default function CompanyDashboard() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const openImageModal = (src: string) => {
+    setImageModalSrc(src);
+    setImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setImageModalOpen(false);
+    setImageModalSrc('');
   };
 
   const fetchMessages = useCallback(async () => {
@@ -282,7 +294,7 @@ export default function CompanyDashboard() {
         numero: selectedContact,
         sender: selectedContact,
         number: getPhoneNumber(selectedContact),
-        'minha?': 'false',
+        'minha?': 'true',
         pushname: company.name,
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
@@ -552,20 +564,20 @@ export default function CompanyDashboard() {
                     </div>
                     <div className="space-y-2">
                       {msgs.map((msg) => {
-                        const isReceivedMessage = msg['minha?'] === 'true';
+                        const isSentMessage = msg['minha?'] === 'true';
                         const base64Type = msg.base64 ? detectBase64Type(msg.base64) : null;
                         const hasBase64Content = msg.base64 && base64Type;
 
                         return (
                           <div
                             key={msg.id}
-                            className={`flex ${isReceivedMessage ? 'justify-start' : 'justify-end'}`}
+                            className={`flex ${isSentMessage ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
                               className={`max-w-[65%] rounded-2xl ${
-                                isReceivedMessage
-                                  ? 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
-                                  : 'bg-teal-500 text-white rounded-br-sm'
+                                isSentMessage
+                                  ? 'bg-teal-500 text-white rounded-br-sm'
+                                  : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
                               }`}
                             >
                               {msg.urlimagem && !hasBase64Content && (
@@ -575,7 +587,7 @@ export default function CompanyDashboard() {
                                     alt="Imagem"
                                     className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
                                     style={{ maxHeight: '300px' }}
-                                    onClick={() => window.open(msg.urlimagem!, '_blank')}
+                                    onClick={() => openImageModal(msg.urlimagem!)}
                                   />
                                 </div>
                               )}
@@ -587,12 +599,7 @@ export default function CompanyDashboard() {
                                     alt="Imagem"
                                     className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
                                     style={{ maxHeight: '300px' }}
-                                    onClick={() => {
-                                      const win = window.open();
-                                      if (win) {
-                                        win.document.write(`<img src="${normalizeBase64(msg.base64!, 'image')}" />`);
-                                      }
-                                    }}
+                                    onClick={() => openImageModal(normalizeBase64(msg.base64!, 'image'))}
                                   />
                                 </div>
                               )}
@@ -600,12 +607,12 @@ export default function CompanyDashboard() {
                               {hasBase64Content && base64Type === 'audio' && (
                                 <div className="p-3">
                                   <div className={`flex items-center gap-3 p-3 rounded-xl ${
-                                    isReceivedMessage ? 'bg-gray-50' : 'bg-teal-600'
+                                    isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
                                   }`}>
                                     <button
                                       onClick={() => handleAudioPlay(msg.id, msg.base64!)}
                                       className={`p-2 rounded-full ${
-                                        isReceivedMessage ? 'bg-teal-500 hover:bg-teal-600' : 'bg-teal-700 hover:bg-teal-800'
+                                        isSentMessage ? 'bg-teal-700 hover:bg-teal-800' : 'bg-teal-500 hover:bg-teal-600'
                                       } transition`}
                                     >
                                       {playingAudio === msg.id ? (
@@ -618,11 +625,11 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium">
                                         {msg.message || 'Áudio'}
                                       </p>
-                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                         Clique para {playingAudio === msg.id ? 'pausar' : 'reproduzir'}
                                       </p>
                                     </div>
-                                    <Mic className={`w-5 h-5 ${isReceivedMessage ? 'text-teal-500' : 'text-teal-100'}`} />
+                                    <Mic className={`w-5 h-5 ${isSentMessage ? 'text-teal-100' : 'text-teal-500'}`} />
                                   </div>
                                 </div>
                               )}
@@ -632,7 +639,7 @@ export default function CompanyDashboard() {
                                   <button
                                     onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
                                     className={`flex items-center gap-2 p-2.5 rounded-xl w-full ${
-                                      isReceivedMessage ? 'bg-gray-50 hover:bg-gray-100' : 'bg-teal-600 hover:bg-teal-700'
+                                      isSentMessage ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-50 hover:bg-gray-100'
                                     } transition`}
                                   >
                                     <FileText className="w-8 h-8 flex-shrink-0" />
@@ -640,7 +647,7 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                         Clique para baixar
                                       </p>
                                     </div>
@@ -656,7 +663,7 @@ export default function CompanyDashboard() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={`flex items-center gap-2 p-2.5 rounded-xl ${
-                                      isReceivedMessage ? 'bg-gray-50' : 'bg-teal-600'
+                                      isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
                                     } hover:opacity-90 transition`}
                                   >
                                     <FileText className="w-8 h-8 flex-shrink-0" />
@@ -664,7 +671,7 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                         Clique para abrir
                                       </p>
                                     </div>
@@ -681,10 +688,10 @@ export default function CompanyDashboard() {
                               )}
 
                               <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
-                                <span className={`text-[10px] ${isReceivedMessage ? 'text-gray-400' : 'text-teal-100'}`}>
+                                <span className={`text-[10px] ${isSentMessage ? 'text-teal-100' : 'text-gray-400'}`}>
                                   {formatTime(msg.date_time || msg.created_at)}
                                 </span>
-                                {!isReceivedMessage && (
+                                {isSentMessage && (
                                   <CheckCheck className="w-3.5 h-3.5 text-teal-50" />
                                 )}
                               </div>
@@ -789,6 +796,29 @@ export default function CompanyDashboard() {
           </div>
         )}
       </div>
+
+      {imageModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-5xl max-h-[90vh]">
+            <button
+              onClick={closeImageModal}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition"
+              title="Fechar"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img
+              src={imageModalSrc}
+              alt="Imagem ampliada"
+              className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
