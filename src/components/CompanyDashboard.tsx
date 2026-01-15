@@ -238,20 +238,39 @@ export default function CompanyDashboard() {
     };
   }, [company?.api_key, fetchMessages]);
 
-  const formatTime = (dateString: string | null) => {
-    if (!dateString) return '';
+  const formatTime = (msgOrTimestamp: any) => {
+    if (!msgOrTimestamp) return '';
     try {
-      const date = new Date(dateString);
+      let timestamp: number;
+
+      if (typeof msgOrTimestamp === 'string' || typeof msgOrTimestamp === 'number') {
+        timestamp = typeof msgOrTimestamp === 'number' ? msgOrTimestamp : new Date(msgOrTimestamp).getTime();
+      } else {
+        timestamp = getMessageTimestamp(msgOrTimestamp);
+      }
+
+      if (!timestamp || timestamp === 0) return '';
+      const date = new Date(timestamp);
       return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     } catch {
       return '';
     }
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '';
+  const formatDate = (msgOrTimestamp: any) => {
+    if (!msgOrTimestamp) return '';
     try {
-      const date = new Date(dateString);
+      let timestamp: number;
+
+      if (typeof msgOrTimestamp === 'string' || typeof msgOrTimestamp === 'number') {
+        timestamp = typeof msgOrTimestamp === 'number' ? msgOrTimestamp : new Date(msgOrTimestamp).getTime();
+      } else {
+        timestamp = getMessageTimestamp(msgOrTimestamp);
+      }
+
+      if (!timestamp || timestamp === 0) return '';
+
+      const date = new Date(timestamp);
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
@@ -523,7 +542,7 @@ export default function CompanyDashboard() {
   const groupMessagesByDate = (msgs: Message[]) => {
     const groups: { [key: string]: Message[] } = {};
     msgs.forEach((msg) => {
-      const date = formatDate(msg.date_time || msg.created_at);
+      const date = formatDate(msg);
       if (!groups[date]) {
         groups[date] = [];
       }
@@ -812,7 +831,7 @@ export default function CompanyDashboard() {
 
                               <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
                                 <span className={`text-[10px] ${isSentMessage ? 'text-teal-100' : 'text-gray-400'}`}>
-                                  {formatTime(msg.date_time || msg.created_at)}
+                                  {formatTime(msg)}
                                 </span>
                                 {isSentMessage && (
                                   <CheckCheck className="w-3.5 h-3.5 text-teal-50" />
