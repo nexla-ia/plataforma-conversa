@@ -311,6 +311,8 @@ export default function CompanyDashboard() {
 
     setSending(true);
     try {
+      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
       const newMessage = {
         numero: selectedContact,
         sender: selectedContact,
@@ -319,7 +321,7 @@ export default function CompanyDashboard() {
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
         instancia: company.name,
-        idmessage: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        idmessage: generatedIdMessage,
         ...messageData,
       };
 
@@ -342,7 +344,7 @@ export default function CompanyDashboard() {
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
           caption: messageData.caption || null,
-          idmessage: messageData.idmessage || null,
+          idmessage: generatedIdMessage,
           instancia: company.name,
         };
 
