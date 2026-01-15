@@ -342,6 +342,7 @@ export default function CompanyDashboard() {
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
           caption: messageData.caption || null,
+          idmessage: messageData.idmessage || null,
           instancia: company.name,
         };
 
