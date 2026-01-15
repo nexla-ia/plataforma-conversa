@@ -97,6 +97,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Verificar se o usuário é super admin
+    console.log("Checking if user is super admin:", callerId);
     const checkAdminRes = await fetch(
       `${SUPABASE_URL}/rest/v1/super_admins?user_id=eq.${callerId}&select=user_id`,
       {
@@ -108,9 +109,12 @@ Deno.serve(async (req: Request) => {
       }
     );
 
+    console.log("Admin check status:", checkAdminRes.status);
     const adminData = await checkAdminRes.json();
+    console.log("Admin data:", JSON.stringify(adminData));
 
     if (!Array.isArray(adminData) || adminData.length === 0) {
+      console.error("User is not a super admin");
       return new Response(
         JSON.stringify({
           error: "Access denied",
@@ -123,8 +127,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log("Super admin verified successfully");
+
     // Parse body
     const body: Partial<Payload> = await req.json().catch(() => ({}));
+    console.log("Request body received:", JSON.stringify(body));
 
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "").trim();
@@ -132,7 +139,10 @@ Deno.serve(async (req: Request) => {
     const phone_number = String(body.phone_number ?? "").trim();
     const api_key = String(body.api_key ?? "").trim();
 
+    console.log("Parsed fields:", { email, name, phone_number, api_key, passwordLength: password.length });
+
     if (!email || !password || !name || !phone_number || !api_key) {
+      console.error("Missing required fields");
       return new Response(
         JSON.stringify({
           error: "Campos obrigatórios: email, password, name, phone_number, api_key",
@@ -145,6 +155,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Criar usuário no auth.users usando Admin API
+    console.log("Creating user in auth.users...");
     const createUserRes = await fetch(
       `${SUPABASE_URL}/auth/v1/admin/users`,
       {
@@ -162,8 +173,11 @@ Deno.serve(async (req: Request) => {
       }
     );
 
+    console.log("User creation status:", createUserRes.status);
+
     if (!createUserRes.ok) {
       const errorData = await createUserRes.json();
+      console.error("User creation failed:", JSON.stringify(errorData));
       return new Response(
         JSON.stringify({
           error: "Erro ao criar usuário",
@@ -178,8 +192,20 @@ Deno.serve(async (req: Request) => {
 
     const userData = await createUserRes.json();
     const newUserId = userData.id;
+    console.log("User created successfully with ID:", newUserId);
 
     // Inserir empresa na tabela companies
+    console.log("Inserting company into database...");
+    const companyData = {
+      name,
+      phone_number,
+      api_key,
+      email,
+      user_id: newUserId,
+      is_super_admin: false,
+    };
+    console.log("Company data to insert:", JSON.stringify(companyData));
+
     const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
       method: "POST",
       headers: {
@@ -188,18 +214,17 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
         Prefer: "return=minimal",
       },
-      body: JSON.stringify({
-        name,
-        phone_number,
-        api_key,
-        email,
-        user_id: newUserId,
-        is_super_admin: false,
-      }),
+      body: JSON.stringify(companyData),
     });
 
+    console.log("Company insertion status:", insertRes.status);
+
     if (!insertRes.ok) {
+      const errorText = await insertRes.text();
+      console.error("Company insertion failed. Status:", insertRes.status, "Response:", errorText);
+
       // Deletar usuário se inserção falhar
+      console.log("Rolling back: deleting user...");
       await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${newUserId}`, {
         method: "DELETE",
         headers: {
@@ -208,11 +233,17 @@ Deno.serve(async (req: Request) => {
         },
       });
 
-      const errorData = await insertRes.json();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { message: errorText };
+      }
+
       return new Response(
         JSON.stringify({
           error: "Erro ao inserir empresa",
-          details: errorData.message || "Unknown error",
+          details: errorData.message || errorData.msg || "Unknown error",
         }),
         {
           status: 400,
@@ -220,6 +251,8 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    console.log("Company inserted successfully");
 
     return new Response(
       JSON.stringify({
