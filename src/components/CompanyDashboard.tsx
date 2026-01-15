@@ -336,6 +336,8 @@ export default function CompanyDashboard() {
       }
 
       try {
+        const timestamp = new Date().toISOString();
+
         const webhookPayload = {
           numero: selectedContact,
           message: messageData.message || '',
@@ -345,6 +347,8 @@ export default function CompanyDashboard() {
           urlpdf: messageData.urlpdf || null,
           caption: messageData.caption || null,
           idmessage: generatedIdMessage,
+          pushname: company.name,
+          timestamp: timestamp,
           instancia: company.name,
         };
 
