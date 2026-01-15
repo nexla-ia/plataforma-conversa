@@ -311,7 +311,7 @@ export default function CompanyDashboard() {
     setSending(true);
     try {
       const newMessage = {
-        numero: getPhoneNumber(selectedContact),
+        numero: selectedContact,
         sender: selectedContact,
         'minha?': 'true',
         pushname: company.name,
