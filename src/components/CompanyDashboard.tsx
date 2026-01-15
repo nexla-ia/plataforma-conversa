@@ -122,23 +122,30 @@ export default function CompanyDashboard() {
     }
   };
 
-  const getPhoneNumber = (msg: Message): string => {
-    return msg.sender || msg.number || msg.numero || 'Desconhecido';
+  const getContactId = (msg: Message): string => {
+    return msg.numero || msg.sender || msg.number || 'Desconhecido';
+  };
+
+  const getPhoneNumber = (contactId: string): string => {
+    if (contactId.includes('@')) {
+      return contactId.split('@')[0];
+    }
+    return contactId;
   };
 
   const getContactName = (msg: Message): string => {
-    return msg.pushname || getPhoneNumber(msg);
+    return msg.pushname || getPhoneNumber(getContactId(msg));
   };
 
   const groupMessagesByContact = (): Contact[] => {
     const contactsMap: { [key: string]: Contact } = {};
 
     messages.forEach((msg) => {
-      const phoneNumber = getPhoneNumber(msg);
+      const contactId = getContactId(msg);
 
-      if (!contactsMap[phoneNumber]) {
-        contactsMap[phoneNumber] = {
-          phoneNumber,
+      if (!contactsMap[contactId]) {
+        contactsMap[contactId] = {
+          phoneNumber: contactId,
           name: getContactName(msg),
           lastMessage: '',
           lastMessageTime: '',
@@ -147,7 +154,7 @@ export default function CompanyDashboard() {
         };
       }
 
-      contactsMap[phoneNumber].messages.push(msg);
+      contactsMap[contactId].messages.push(msg);
     });
 
     const contacts = Object.values(contactsMap).map((contact) => {
@@ -178,8 +185,10 @@ export default function CompanyDashboard() {
 
   const filteredContacts = contacts.filter((contact) => {
     const searchLower = searchTerm.toLowerCase();
+    const displayPhone = getPhoneNumber(contact.phoneNumber);
     return (
       contact.name.toLowerCase().includes(searchLower) ||
+      displayPhone.toLowerCase().includes(searchLower) ||
       contact.phoneNumber.toLowerCase().includes(searchLower)
     );
   });
@@ -340,7 +349,7 @@ export default function CompanyDashboard() {
                 </div>
                 <div>
                   <h1 className="text-white font-medium">{selectedContactData.name}</h1>
-                  <p className="text-gray-400 text-xs">{selectedContactData.phoneNumber}</p>
+                  <p className="text-gray-400 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
                 </div>
               </div>
               <button
