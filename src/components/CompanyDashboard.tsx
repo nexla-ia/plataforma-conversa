@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, Image, FileText, User, Clock, Phone, RefreshCw, AlertCircle, MessageCircle } from 'lucide-react';
-import ChatView from './ChatView';
+import { MessageSquare, LogOut, Image, FileText, User, Clock, Phone, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
@@ -10,7 +9,6 @@ export default function CompanyDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'chat'>('chat');
 
   const fetchMessages = useCallback(async () => {
     if (!company) {
@@ -138,47 +136,6 @@ export default function CompanyDashboard() {
     );
   }
 
-  if (viewMode === 'chat') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <header className="bg-white border-b border-slate-200">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-500 p-2 rounded-lg">
-                  <MessageCircle className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-slate-800">{company?.name}</h1>
-                  <p className="text-sm text-slate-600">Chat de Conversas</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Ver Lista
-                </button>
-                <button
-                  onClick={() => signOut()}
-                  className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sair
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-        <div className="flex-1">
-          <ChatView />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
@@ -190,17 +147,10 @@ export default function CompanyDashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-800">{company?.name}</h1>
-                <p className="text-sm text-slate-600">Lista de Mensagens</p>
+                <p className="text-sm text-slate-600">Mensagens do WhatsApp</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setViewMode('chat')}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Ver Chat
-              </button>
               <button
                 onClick={() => fetchMessages()}
                 disabled={refreshing}
