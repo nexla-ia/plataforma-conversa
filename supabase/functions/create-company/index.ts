@@ -1,11 +1,9 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Max-Age": "86400",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
 type Payload = {
@@ -17,9 +15,11 @@ type Payload = {
 };
 
 Deno.serve(async (req: Request) => {
-  // ✅ Preflight CORS
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
   }
 
   if (req.method !== "POST") {
@@ -30,24 +30,44 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Missing Authorization" }), {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+
+    // Decodificar JWT para obter o user_id
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return new Response(JSON.stringify({ error: "Invalid JWT token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const payload = JSON.parse(atob(parts[1]));
+    const callerId = payload.sub;
 
-    if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE) {
+    if (!callerId) {
+      return new Response(JSON.stringify({ error: "Invalid token: no user ID" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
       return new Response(
-        JSON.stringify({
-          error:
-            "Secrets ausentes: SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY",
-        }),
+        JSON.stringify({ error: "Server configuration error" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -55,47 +75,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Cliente com JWT do usuário (pra validar quem está chamando)
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    // Verificar se o usuário é super admin
+    const checkAdminRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/super_admins?user_id=eq.${callerId}&select=user_id`,
+      {
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    const { data: userData, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !userData?.user) {
-      return new Response(JSON.stringify({ 
-        error: "Invalid user session",
-        details: userErr?.message || "No user data returned"
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const adminData = await checkAdminRes.json();
+
+    if (!Array.isArray(adminData) || adminData.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error: "Access denied",
+          details: "User is not a super admin",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    const callerId = userData.user.id;
-
-    // Cliente admin para verificar super admin (bypassa RLS)
-    const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    // ✅ Check super admin via tabela super_admins usando service role
-    const { data: saRow, error: saErr } = await adminClient
-      .from("super_admins")
-      .select("user_id")
-      .eq("user_id", callerId)
-      .maybeSingle();
-
-    if (saErr || !saRow) {
-      return new Response(JSON.stringify({
-        error: "Not allowed",
-        details: saErr?.message || "User is not a super admin"
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    // Parse body
     const body: Partial<Payload> = await req.json().catch(() => ({}));
 
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -116,16 +123,31 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 1) Criar usuário no auth.users
-    const { data: newUserData, error: signUpError } = await adminClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
+    // Criar usuário no auth.users usando Admin API
+    const createUserRes = await fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          email_confirm: true,
+        }),
+      }
+    );
 
-    if (signUpError || !newUserData.user) {
+    if (!createUserRes.ok) {
+      const errorData = await createUserRes.json();
       return new Response(
-        JSON.stringify({ error: `Erro ao criar usuário: ${signUpError?.message || 'Usuário não retornado'}` }),
+        JSON.stringify({
+          error: "Erro ao criar usuário",
+          details: errorData.msg || errorData.message || "Unknown error",
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -133,26 +155,49 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const newUserId = newUserData.user.id;
+    const userData = await createUserRes.json();
+    const newUserId = userData.id;
 
-    // 2) Inserir empresa com o user_id do novo usuário
-    const { error: insErr } = await adminClient.from("companies").insert({
-      name,
-      phone_number,
-      api_key,
-      email,
-      user_id: newUserId,
-      is_super_admin: false,
+    // Inserir empresa na tabela companies
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        name,
+        phone_number,
+        api_key,
+        email,
+        user_id: newUserId,
+        is_super_admin: false,
+      }),
     });
 
-    if (insErr) {
-      // Tentar deletar o usuário criado se houver erro
-      await adminClient.auth.admin.deleteUser(newUserId);
-
-      return new Response(JSON.stringify({ error: `Erro ao inserir empresa: ${insErr.message}` }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!insertRes.ok) {
+      // Deletar usuário se inserção falhar
+      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${newUserId}`, {
+        method: "DELETE",
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        },
       });
+
+      const errorData = await insertRes.json();
+      return new Response(
+        JSON.stringify({
+          error: "Erro ao inserir empresa",
+          details: errorData.message || "Unknown error",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(
@@ -161,12 +206,22 @@ Deno.serve(async (req: Request) => {
         company: { name, email, phone_number, api_key, user_id: newUserId },
         message: "Empresa e usuário criados com sucesso",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   } catch (e) {
+    console.error("Error in create-company:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : String(e) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: "Internal server error",
+        details: e instanceof Error ? e.message : String(e),
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
     );
   }
 });
