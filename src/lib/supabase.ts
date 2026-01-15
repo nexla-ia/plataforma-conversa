@@ -40,5 +40,6 @@ export interface Message {
   date_time: string | null;
   sender: string | null;
   apikey_instancia: string | null;
+  caption: string | null;
   created_at: string;
 }

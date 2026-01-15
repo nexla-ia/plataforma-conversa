@@ -22,6 +22,7 @@ export default function CompanyDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [messageText, setMessageText] = useState('');
+  const [imageCaption, setImageCaption] = useState('');
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -340,6 +341,7 @@ export default function CompanyDashboard() {
           base64: messageData.base64 || null,
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
+          caption: messageData.caption || null,
           instancia: company.name,
         };
 
@@ -407,7 +409,10 @@ export default function CompanyDashboard() {
 
       if (type === 'image') {
         messageData.urlimagem = publicUrl;
-        messageData.message = 'Imagem';
+        messageData.message = imageCaption || 'Imagem';
+        if (imageCaption) {
+          messageData.caption = imageCaption;
+        }
       } else if (type === 'document') {
         messageData.urlpdf = publicUrl;
         messageData.message = file.name;
@@ -417,6 +422,7 @@ export default function CompanyDashboard() {
       }
 
       await sendMessage(messageData);
+      setImageCaption('');
     } catch (err) {
       console.error('Erro ao fazer upload:', err);
       alert('Erro ao fazer upload do arquivo');
@@ -648,6 +654,11 @@ export default function CompanyDashboard() {
                                     style={{ maxHeight: '300px' }}
                                     onClick={() => openImageModal(normalizeBase64(msg.base64!, 'image'))}
                                   />
+                                  {msg.caption && (
+                                    <div className="mt-2 px-2 text-sm">
+                                      {msg.caption}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -757,6 +768,27 @@ export default function CompanyDashboard() {
             </div>
 
             <div className="bg-white px-5 py-3.5 border-t border-gray-200">
+              {imageCaption && (
+                <div className="mb-2 px-3 py-2 bg-teal-50 border border-teal-200 rounded-lg">
+                  <p className="text-xs text-teal-600 mb-1">Legenda da imagem:</p>
+                  <p className="text-sm text-gray-700">{imageCaption}</p>
+                  <button
+                    onClick={() => setImageCaption('')}
+                    className="text-xs text-red-500 hover:text-red-700 mt-1"
+                  >
+                    Remover legenda
+                  </button>
+                </div>
+              )}
+              <div className="mb-2">
+                <input
+                  type="text"
+                  value={imageCaption}
+                  onChange={(e) => setImageCaption(e.target.value)}
+                  placeholder="Legenda para imagem (opcional)"
+                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-teal-400 transition"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="file"
