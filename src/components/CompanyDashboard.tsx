@@ -130,6 +130,19 @@ export default function CompanyDashboard() {
     setImageModalSrc('');
   };
 
+  const getMessageTimestamp = (msg: any): number => {
+    if (msg.timestamp && !isNaN(Number(msg.timestamp))) {
+      return Number(msg.timestamp) * 1000;
+    }
+    if (msg.date_time) {
+      return new Date(msg.date_time).getTime();
+    }
+    if (msg.created_at) {
+      return new Date(msg.created_at).getTime();
+    }
+    return 0;
+  };
+
   const fetchMessages = useCallback(async () => {
     if (!company) {
       setLoading(false);
@@ -173,9 +186,7 @@ export default function CompanyDashboard() {
         ...(receivedResult.data || []),
         ...(sentResult.data || [])
       ].sort((a, b) => {
-        const dateA = new Date(a.date_time || a.timestamp || a.created_at || 0).getTime();
-        const dateB = new Date(b.date_time || b.timestamp || b.created_at || 0).getTime();
-        return dateA - dateB;
+        return getMessageTimestamp(a) - getMessageTimestamp(b);
       });
 
       setMessages(allMessages);
@@ -294,14 +305,14 @@ export default function CompanyDashboard() {
 
     const contacts = Object.values(contactsMap).map((contact) => {
       contact.messages.sort((a, b) => {
-        const dateA = new Date(a.date_time || a.timestamp || a.created_at || 0).getTime();
-        const dateB = new Date(b.date_time || b.timestamp || b.created_at || 0).getTime();
-        return dateA - dateB;
+        return getMessageTimestamp(a) - getMessageTimestamp(b);
       });
 
       const lastMsg = contact.messages[contact.messages.length - 1];
       contact.lastMessage = lastMsg.message || (lastMsg.urlimagem ? 'Imagem' : (lastMsg.urlpdf ? 'Documento' : 'Mensagem'));
-      contact.lastMessageTime = lastMsg.date_time || lastMsg.timestamp || lastMsg.created_at || '';
+
+      const lastMsgTime = getMessageTimestamp(lastMsg);
+      contact.lastMessageTime = lastMsgTime > 0 ? new Date(lastMsgTime).toISOString() : '';
       contact.name = getContactName(lastMsg);
 
       return contact;
