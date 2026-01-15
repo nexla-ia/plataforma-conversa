@@ -334,13 +334,13 @@ export default function CompanyDashboard() {
 
       try {
         const webhookPayload = {
-          numero: getPhoneNumber(selectedContact),
-          apikey: company.api_key,
+          numero: selectedContact,
           message: messageData.message || '',
           tipomessage: messageData.tipomessage || 'conversation',
           base64: messageData.base64 || null,
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
+          instancia: company.name,
         };
 
         const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
