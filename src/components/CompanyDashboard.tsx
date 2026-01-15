@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, RefreshCw, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, RefreshCw, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause } from 'lucide-react';
 
 interface Contact {
   phoneNumber: string;
@@ -24,12 +24,77 @@ export default function CompanyDashboard() {
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const detectBase64Type = (base64: string): 'image' | 'audio' | 'document' | null => {
+    if (!base64) return null;
+
+    if (base64.startsWith('data:image/') || base64.startsWith('/9j/') || base64.startsWith('iVBORw0KGgo')) {
+      return 'image';
+    }
+
+    if (base64.startsWith('data:audio/') || base64.includes('audio/mpeg') || base64.includes('audio/ogg')) {
+      return 'audio';
+    }
+
+    if (base64.startsWith('data:application/pdf') || base64.startsWith('JVBERi0')) {
+      return 'document';
+    }
+
+    return 'document';
+  };
+
+  const normalizeBase64 = (base64: string, type: 'image' | 'audio' | 'document'): string => {
+    if (base64.startsWith('data:')) {
+      return base64;
+    }
+
+    const mimeTypes = {
+      image: 'data:image/jpeg;base64,',
+      audio: 'data:audio/mpeg;base64,',
+      document: 'data:application/pdf;base64,'
+    };
+
+    return mimeTypes[type] + base64;
+  };
+
+  const handleAudioPlay = (messageId: string, base64Audio: string) => {
+    if (playingAudio === messageId) {
+      audioRef.current?.pause();
+      setPlayingAudio(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+
+      const audioSrc = normalizeBase64(base64Audio, 'audio');
+      const audio = new Audio(audioSrc);
+      audioRef.current = audio;
+
+      audio.play();
+      setPlayingAudio(messageId);
+
+      audio.onended = () => {
+        setPlayingAudio(null);
+      };
+    }
+  };
+
+  const downloadBase64File = (base64: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = base64.startsWith('data:') ? base64 : `data:application/octet-stream;base64,${base64}`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const fetchMessages = useCallback(async () => {
@@ -487,20 +552,23 @@ export default function CompanyDashboard() {
                     </div>
                     <div className="space-y-2">
                       {msgs.map((msg) => {
-                        const isMyMessage = msg['minha?'] !== 'true';
+                        const isReceivedMessage = msg['minha?'] === 'true';
+                        const base64Type = msg.base64 ? detectBase64Type(msg.base64) : null;
+                        const hasBase64Content = msg.base64 && base64Type;
+
                         return (
                           <div
                             key={msg.id}
-                            className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
+                            className={`flex ${isReceivedMessage ? 'justify-start' : 'justify-end'}`}
                           >
                             <div
                               className={`max-w-[65%] rounded-2xl ${
-                                isMyMessage
-                                  ? 'bg-teal-500 text-white rounded-br-sm'
-                                  : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
+                                isReceivedMessage
+                                  ? 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
+                                  : 'bg-teal-500 text-white rounded-br-sm'
                               }`}
                             >
-                              {msg.urlimagem && (
+                              {msg.urlimagem && !hasBase64Content && (
                                 <div className="p-1">
                                   <img
                                     src={msg.urlimagem}
@@ -512,14 +580,83 @@ export default function CompanyDashboard() {
                                 </div>
                               )}
 
-                              {msg.urlpdf && (
+                              {hasBase64Content && base64Type === 'image' && (
+                                <div className="p-1">
+                                  <img
+                                    src={normalizeBase64(msg.base64!, 'image')}
+                                    alt="Imagem"
+                                    className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
+                                    style={{ maxHeight: '300px' }}
+                                    onClick={() => {
+                                      const win = window.open();
+                                      if (win) {
+                                        win.document.write(`<img src="${normalizeBase64(msg.base64!, 'image')}" />`);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              {hasBase64Content && base64Type === 'audio' && (
+                                <div className="p-3">
+                                  <div className={`flex items-center gap-3 p-3 rounded-xl ${
+                                    isReceivedMessage ? 'bg-gray-50' : 'bg-teal-600'
+                                  }`}>
+                                    <button
+                                      onClick={() => handleAudioPlay(msg.id, msg.base64!)}
+                                      className={`p-2 rounded-full ${
+                                        isReceivedMessage ? 'bg-teal-500 hover:bg-teal-600' : 'bg-teal-700 hover:bg-teal-800'
+                                      } transition`}
+                                    >
+                                      {playingAudio === msg.id ? (
+                                        <Pause className="w-5 h-5 text-white" />
+                                      ) : (
+                                        <Play className="w-5 h-5 text-white" />
+                                      )}
+                                    </button>
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium">
+                                        {msg.message || 'Áudio'}
+                                      </p>
+                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
+                                        Clique para {playingAudio === msg.id ? 'pausar' : 'reproduzir'}
+                                      </p>
+                                    </div>
+                                    <Mic className={`w-5 h-5 ${isReceivedMessage ? 'text-teal-500' : 'text-teal-100'}`} />
+                                  </div>
+                                </div>
+                              )}
+
+                              {hasBase64Content && base64Type === 'document' && (
+                                <div className="p-2">
+                                  <button
+                                    onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
+                                    className={`flex items-center gap-2 p-2.5 rounded-xl w-full ${
+                                      isReceivedMessage ? 'bg-gray-50 hover:bg-gray-100' : 'bg-teal-600 hover:bg-teal-700'
+                                    } transition`}
+                                  >
+                                    <FileText className="w-8 h-8 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0 text-left">
+                                      <p className="text-sm font-medium truncate">
+                                        {msg.message || 'Documento'}
+                                      </p>
+                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
+                                        Clique para baixar
+                                      </p>
+                                    </div>
+                                    <Download className="w-5 h-5 flex-shrink-0" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {msg.urlpdf && !hasBase64Content && (
                                 <div className="p-2">
                                   <a
                                     href={msg.urlpdf}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={`flex items-center gap-2 p-2.5 rounded-xl ${
-                                      isMyMessage ? 'bg-teal-600' : 'bg-gray-50'
+                                      isReceivedMessage ? 'bg-gray-50' : 'bg-teal-600'
                                     } hover:opacity-90 transition`}
                                   >
                                     <FileText className="w-8 h-8 flex-shrink-0" />
@@ -527,7 +664,7 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-[11px] ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                      <p className={`text-[11px] ${isReceivedMessage ? 'text-gray-500' : 'text-teal-100'}`}>
                                         Clique para abrir
                                       </p>
                                     </div>
@@ -535,7 +672,7 @@ export default function CompanyDashboard() {
                                 </div>
                               )}
 
-                              {msg.message && !msg.urlpdf && (
+                              {msg.message && !msg.urlpdf && !hasBase64Content && (
                                 <div className="px-3.5 py-2">
                                   <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">
                                     {msg.message}
@@ -544,10 +681,10 @@ export default function CompanyDashboard() {
                               )}
 
                               <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
-                                <span className={`text-[10px] ${isMyMessage ? 'text-teal-100' : 'text-gray-400'}`}>
+                                <span className={`text-[10px] ${isReceivedMessage ? 'text-gray-400' : 'text-teal-100'}`}>
                                   {formatTime(msg.date_time || msg.created_at)}
                                 </span>
-                                {isMyMessage && (
+                                {!isReceivedMessage && (
                                   <CheckCheck className="w-3.5 h-3.5 text-teal-50" />
                                 )}
                               </div>
