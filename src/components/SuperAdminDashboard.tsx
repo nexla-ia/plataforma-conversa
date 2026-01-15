@@ -116,14 +116,8 @@ export default function SuperAdminDashboard() {
         throw new Error("Sem token. Faça login novamente.");
       }
 
-      // ✅ CHAMADA COM BEARER (resolve 401 quando faltava auth)
-      const {
-  data: { session },
-  error: sessErr,
-} = await supabase.auth.getSession();
-
-console.log("SESSION:", session);
-console.log("ACCESS_TOKEN:", session?.access_token?.slice(0, 30));
+      console.log("SESSION:", session);
+      console.log("ACCESS_TOKEN:", session?.access_token?.slice(0, 30));
 
       const { data, error } = await supabase.functions.invoke("create-company", {
         body: {
