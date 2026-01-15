@@ -30,6 +30,32 @@ export default function SuperAdminDashboard() {
   const [password, setPassword] = useState("");
 
   // =========================
+  // Formatação de Telefone
+  // =========================
+  const formatPhoneNumber = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 10) {
+      return numbers
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+    return numbers
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .slice(0, 15);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhoneNumber(formatted);
+  };
+
+  const generateApiKey = () => {
+    const uuid = crypto.randomUUID();
+    setApiKey(uuid);
+  };
+
+  // =========================
   // Load user + companies
   // =========================
   useEffect(() => {
@@ -100,6 +126,17 @@ export default function SuperAdminDashboard() {
       !password.trim()
     ) {
       setErrorMsg("Preencha todos os campos.");
+      return;
+    }
+
+    const phoneNumbers = phone_number.replace(/\D/g, "");
+    if (phoneNumbers.length < 10) {
+      setErrorMsg("Telefone deve ter pelo menos 10 dígitos.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg("Senha deve ter no mínimo 6 caracteres.");
       return;
     }
 
@@ -225,6 +262,7 @@ export default function SuperAdminDashboard() {
                     Nome da Empresa
                   </label>
                   <input
+                    required
                     className="w-full rounded-lg border border-slate-200 px-3 py-2"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -237,10 +275,13 @@ export default function SuperAdminDashboard() {
                     Número de Telefone
                   </label>
                   <input
+                    required
+                    type="tel"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2"
                     value={phone_number}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={handlePhoneChange}
                     placeholder="(69) 99999-9999"
+                    maxLength={15}
                   />
                 </div>
 
@@ -248,12 +289,22 @@ export default function SuperAdminDashboard() {
                   <label className="block text-sm text-slate-700 mb-1">
                     Chave API
                   </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                    value={api_key}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="UUID/chave"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      required
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2"
+                      value={api_key}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="UUID/chave"
+                    />
+                    <button
+                      type="button"
+                      onClick={generateApiKey}
+                      className="rounded-lg bg-slate-600 px-3 py-2 text-white text-sm hover:bg-slate-700"
+                    >
+                      Gerar
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -261,6 +312,7 @@ export default function SuperAdminDashboard() {
                     Email
                   </label>
                   <input
+                    required
                     type="email"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2"
                     value={email}
@@ -272,14 +324,16 @@ export default function SuperAdminDashboard() {
 
               <div>
                 <label className="block text-sm text-slate-700 mb-1">
-                  Senha
+                  Senha <span className="text-slate-500 text-xs">(mínimo 6 caracteres)</span>
                 </label>
                 <input
+                  required
                   type="password"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="********"
+                  minLength={6}
                 />
               </div>
 
