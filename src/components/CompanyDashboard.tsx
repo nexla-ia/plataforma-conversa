@@ -146,20 +146,40 @@ export default function CompanyDashboard() {
     }, 10000);
 
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('apikey_instancia', company.api_key)
-        .order('created_at', { ascending: true });
+      const [receivedResult, sentResult] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('apikey_instancia', company.api_key),
+        supabase
+          .from('sent_messages')
+          .select('*')
+          .eq('apikey_instancia', company.api_key)
+      ]);
 
       clearTimeout(timeout);
 
-      if (error) {
-        setError(`Erro ao carregar mensagens: ${error.message}`);
-      } else if (data) {
-        setMessages(data);
-        setTimeout(scrollToBottom, 100);
+      if (receivedResult.error) {
+        setError(`Erro ao carregar mensagens recebidas: ${receivedResult.error.message}`);
+        return;
       }
+
+      if (sentResult.error) {
+        setError(`Erro ao carregar mensagens enviadas: ${sentResult.error.message}`);
+        return;
+      }
+
+      const allMessages = [
+        ...(receivedResult.data || []),
+        ...(sentResult.data || [])
+      ].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      });
+
+      setMessages(allMessages);
+      setTimeout(scrollToBottom, 100);
     } catch (err: any) {
       clearTimeout(timeout);
       setError(`Erro ao carregar mensagens: ${err.message}`);
@@ -182,6 +202,18 @@ export default function CompanyDashboard() {
           event: '*',
           schema: 'public',
           table: 'messages',
+          filter: `apikey_instancia=eq.${company.api_key}`,
+        },
+        () => {
+          fetchMessages();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sent_messages',
           filter: `apikey_instancia=eq.${company.api_key}`,
         },
         () => {
@@ -332,11 +364,12 @@ export default function CompanyDashboard() {
         date_time: new Date().toISOString(),
         instancia: instanciaValue,
         idmessage: generatedIdMessage,
+        company_id: company.id,
         ...messageData,
       };
 
       const { error } = await supabase
-        .from('messages')
+        .from('sent_messages')
         .insert([newMessage]);
 
       if (error) {
