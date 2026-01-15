@@ -345,33 +345,34 @@ export default function CompanyDashboard() {
   const messageGroups = groupMessagesByDate(currentMessages);
 
   return (
-    <div className="h-screen flex bg-[#111b21] overflow-hidden">
+    <div className="h-screen flex bg-gray-50 overflow-hidden">
       <div
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } md:flex w-full md:w-[400px] bg-[#111b21] border-r border-[#2a3942] flex-col`}
+        } md:flex w-full md:w-[380px] bg-white border-r border-gray-200 flex-col`}
       >
-        <header className="bg-[#202c33] px-4 py-3 flex items-center justify-between">
+        <header className="bg-white px-5 py-4 flex items-center justify-between border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 bg-teal-500 rounded-full flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-white font-medium text-sm">{company?.name}</h2>
+              <h2 className="text-gray-900 font-semibold text-base">{company?.name}</h2>
+              <p className="text-xs text-gray-500">Atendimento Multicanal</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => fetchMessages()}
               disabled={refreshing}
-              className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition disabled:opacity-50"
+              className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
               title="Atualizar"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => signOut()}
-              className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition"
+              className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
               title="Sair"
             >
               <LogOut className="w-4 h-4" />
@@ -380,35 +381,35 @@ export default function CompanyDashboard() {
         </header>
 
         {error && (
-          <div className="bg-[#2a3942] border-b border-[#374248] px-4 py-2 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-            <p className="text-red-300 text-xs flex-1">{error}</p>
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-xs flex-1">{error}</p>
           </div>
         )}
 
-        <div className="px-3 py-2 bg-[#111b21]">
+        <div className="px-4 py-3 bg-white border-b border-gray-200">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Pesquisar contato"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#202c33] text-gray-200 text-sm pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full bg-gray-50 text-gray-900 text-sm pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-gray-50">
           {filteredContacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-4">
-              <MessageSquare className="w-12 h-12 text-gray-600 mb-3" />
-              <p className="text-gray-400 text-sm text-center">
+              <MessageSquare className="w-12 h-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 text-sm text-center">
                 {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
               </p>
             </div>
           ) : (
-            <div>
+            <div className="divide-y divide-gray-100">
               {filteredContacts.map((contact) => (
                 <button
                   key={contact.phoneNumber}
@@ -418,27 +419,29 @@ export default function CompanyDashboard() {
                       setSidebarOpen(false);
                     }
                   }}
-                  className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-[#2a3942] transition ${
-                    selectedContact === contact.phoneNumber ? 'bg-[#2a3942]' : ''
+                  className={`w-full px-4 py-4 flex items-center gap-3 hover:bg-white transition ${
+                    selectedContact === contact.phoneNumber ? 'bg-teal-50 border-r-4 border-teal-500' : 'bg-gray-50'
                   }`}
                 >
-                  <div className="w-12 h-12 bg-teal-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6 text-white" />
+                  <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <User className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1 text-left overflow-hidden">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-white font-medium text-sm truncate">{contact.name}</h3>
-                      <span className="text-xs text-gray-500 ml-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
+                      <span className="text-xs text-gray-400 ml-2 font-medium">
                         {formatTime(contact.lastMessageTime)}
                       </span>
                     </div>
-                    <p className="text-gray-400 text-xs truncate">{contact.lastMessage}</p>
-                  </div>
-                  {contact.unreadCount > 0 && (
-                    <div className="w-5 h-5 bg-teal-600 rounded-full flex items-center justify-center">
-                      <span className="text-xs text-white">{contact.unreadCount}</span>
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
+                      {contact.unreadCount > 0 && (
+                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
+                          <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </button>
               ))}
             </div>
@@ -449,45 +452,40 @@ export default function CompanyDashboard() {
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
         {selectedContactData ? (
           <>
-            <header className="bg-[#202c33] px-4 py-3 flex items-center justify-between shadow-md">
+            <header className="bg-white px-5 py-4 flex items-center justify-between shadow-sm border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition"
+                  className="md:hidden p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
-                <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center shadow-sm">
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-white font-medium">{selectedContactData.name}</h1>
-                  <p className="text-gray-400 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                  <h1 className="text-gray-900 font-semibold text-base">{selectedContactData.name}</h1>
+                  <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
                 </div>
               </div>
               <button
-                className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition"
+                className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
                 title="Mais opções"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
             </header>
 
-            <div
-              className="flex-1 overflow-y-auto bg-gray-100 px-4 py-6"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-              }}
-            >
-              <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex-1 overflow-y-auto bg-gray-50 px-6 py-4">
+              <div className="max-w-5xl mx-auto">
                 {Object.entries(messageGroups).map(([date, msgs]) => (
-                  <div key={date}>
+                  <div key={date} className="mb-6">
                     <div className="flex justify-center mb-4">
-                      <div className="bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-200">
-                        <p className="text-xs text-gray-600 font-medium">{date}</p>
+                      <div className="bg-white px-3 py-1 rounded-full shadow-sm">
+                        <p className="text-[11px] text-gray-500 font-medium">{date}</p>
                       </div>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {msgs.map((msg) => {
                         const isMyMessage = msg['minha?'] === 'true';
                         return (
@@ -496,25 +494,19 @@ export default function CompanyDashboard() {
                             className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
-                              className={`max-w-[70%] rounded-lg shadow-sm ${
+                              className={`max-w-[65%] rounded-2xl ${
                                 isMyMessage
-                                  ? 'bg-teal-600 text-white'
-                                  : 'bg-white text-gray-900'
+                                  ? 'bg-teal-500 text-white rounded-br-sm'
+                                  : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
                               }`}
                             >
-                              {!isMyMessage && msg.pushname && (
-                                <div className="px-3 pt-2">
-                                  <p className="text-xs font-semibold text-teal-600">{msg.pushname}</p>
-                                </div>
-                              )}
-
                               {msg.urlimagem && (
                                 <div className="p-1">
                                   <img
                                     src={msg.urlimagem}
                                     alt="Imagem"
-                                    className="rounded-md max-w-full h-auto cursor-pointer hover:opacity-90 transition"
-                                    style={{ maxHeight: '350px' }}
+                                    className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
+                                    style={{ maxHeight: '300px' }}
                                     onClick={() => window.open(msg.urlimagem!, '_blank')}
                                   />
                                 </div>
@@ -526,40 +518,37 @@ export default function CompanyDashboard() {
                                     href={msg.urlpdf}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className={`flex items-center gap-3 p-3 rounded-md ${
-                                      isMyMessage ? 'bg-teal-700' : 'bg-gray-100'
+                                    className={`flex items-center gap-2 p-2.5 rounded-xl ${
+                                      isMyMessage ? 'bg-teal-600' : 'bg-gray-50'
                                     } hover:opacity-90 transition`}
                                   >
-                                    <div className={`p-2 rounded-full ${isMyMessage ? 'bg-teal-800' : 'bg-gray-200'}`}>
-                                      <FileText className="w-5 h-5" />
-                                    </div>
+                                    <FileText className="w-8 h-8 flex-shrink-0" />
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-xs ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                      <p className={`text-[11px] ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                         Clique para abrir
                                       </p>
                                     </div>
-                                    <Download className="w-4 h-4 flex-shrink-0" />
                                   </a>
                                 </div>
                               )}
 
                               {msg.message && !msg.urlpdf && (
-                                <div className="px-3 py-2">
-                                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                                <div className="px-3.5 py-2">
+                                  <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">
                                     {msg.message}
                                   </p>
                                 </div>
                               )}
 
-                              <div className="px-3 pb-2 flex items-center justify-end gap-1.5">
-                                <span className={`text-[11px] ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                              <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
+                                <span className={`text-[10px] ${isMyMessage ? 'text-teal-100' : 'text-gray-400'}`}>
                                   {formatTime(msg.date_time || msg.created_at)}
                                 </span>
                                 {isMyMessage && (
-                                  <CheckCheck className="w-3.5 h-3.5 text-teal-100" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-teal-50" />
                                 )}
                               </div>
                             </div>
@@ -573,7 +562,7 @@ export default function CompanyDashboard() {
               </div>
             </div>
 
-            <div className="bg-white px-4 py-3 border-t border-gray-200">
+            <div className="bg-white px-5 py-3.5 border-t border-gray-200">
               <div className="flex items-center gap-2">
                 <input
                   type="file"
@@ -593,7 +582,7 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={uploadingFile || sending}
-                  className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
+                  className="p-2 text-gray-400 hover:text-teal-500 hover:bg-gray-50 rounded-lg transition disabled:opacity-50"
                   title="Enviar imagem"
                 >
                   <ImageIcon className="w-5 h-5" />
@@ -601,13 +590,13 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingFile || sending}
-                  className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
+                  className="p-2 text-gray-400 hover:text-teal-500 hover:bg-gray-50 rounded-lg transition disabled:opacity-50"
                   title="Enviar arquivo"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
 
-                <div className="flex-1 bg-gray-100 rounded-full flex items-center px-4 py-2">
+                <div className="flex-1 bg-gray-50 rounded-3xl flex items-center px-4 py-2.5 border border-gray-200 focus-within:border-teal-400 transition">
                   <input
                     type="text"
                     value={messageText}
@@ -620,10 +609,10 @@ export default function CompanyDashboard() {
                     }}
                     placeholder="Digite uma mensagem"
                     disabled={sending || uploadingFile}
-                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-500 focus:outline-none disabled:opacity-50"
+                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                   />
                   <button
-                    className="p-1 text-gray-500 hover:text-teal-600 transition ml-1"
+                    className="p-1 text-gray-400 hover:text-teal-500 transition ml-1"
                     title="Emoji"
                   >
                     <Smile className="w-5 h-5" />
@@ -633,7 +622,7 @@ export default function CompanyDashboard() {
                 <button
                   onClick={handleSendMessage}
                   disabled={!messageText.trim() || sending || uploadingFile}
-                  className="p-3 bg-teal-600 hover:bg-teal-700 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  className="p-3 bg-teal-500 hover:bg-teal-600 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
                   title="Enviar mensagem"
                 >
                   {sending || uploadingFile ? (
@@ -646,17 +635,19 @@ export default function CompanyDashboard() {
 
               {uploadingFile && (
                 <div className="mt-2 text-center">
-                  <p className="text-xs text-gray-600">Enviando arquivo...</p>
+                  <p className="text-xs text-gray-500">Enviando arquivo...</p>
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-[#0b141a]">
+          <div className="flex-1 flex items-center justify-center bg-gray-50">
             <div className="text-center">
-              <MessageSquare className="w-20 h-20 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">WhatsApp Business</h3>
-              <p className="text-gray-500">Selecione uma conversa para começar</p>
+              <div className="w-32 h-32 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <MessageSquare className="w-16 h-16 text-teal-500" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">Selecione uma conversa para começar</h3>
+              <p className="text-gray-400 text-sm">Escolha um contato na lista à esquerda</p>
             </div>
           </div>
         )}
