@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,63 +31,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    console.log("Auth header received:", authHeader ? "present" : "missing");
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Missing or invalid Authorization header" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    console.log("Token length:", token.length);
-
-    // Decodificar JWT para obter o user_id
-    let callerId: string;
-    try {
-      const parts = token.split(".");
-      if (parts.length !== 3) {
-        console.error("Invalid JWT format: expected 3 parts, got", parts.length);
-        return new Response(JSON.stringify({ error: "Invalid JWT token format" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const payload = JSON.parse(atob(parts[1]));
-      console.log("Decoded JWT payload sub:", payload.sub);
-      callerId = payload.sub;
-
-      if (!callerId) {
-        console.error("No user ID in token payload");
-        return new Response(JSON.stringify({ error: "Invalid token: no user ID" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } catch (decodeError) {
-      console.error("Error decoding JWT:", decodeError);
-      return new Response(
-        JSON.stringify({
-          error: "Failed to decode JWT",
-          details: decodeError instanceof Error ? decodeError.message : String(decodeError)
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
+      console.error("Missing environment variables");
       return new Response(
         JSON.stringify({ error: "Server configuration error" }),
         {
@@ -96,24 +46,56 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verificar se o usuário é super admin
+    const authHeader = req.headers.get("Authorization");
+    console.log("Auth header received:", authHeader ? "present" : "missing");
+
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: authHeader },
+      },
+    });
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser();
+
+    if (userError || !user) {
+      console.error("Failed to get user:", userError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized", details: userError?.message }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const callerId = user.id;
+    console.log("User authenticated:", callerId);
+
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
     console.log("Checking if user is super admin:", callerId);
-    const checkAdminRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/super_admins?user_id=eq.${callerId}&select=user_id`,
-      {
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const { data: adminData, error: adminError } = await supabaseAdmin
+      .from("super_admins")
+      .select("user_id")
+      .eq("user_id", callerId)
+      .maybeSingle();
 
-    console.log("Admin check status:", checkAdminRes.status);
-    const adminData = await checkAdminRes.json();
-    console.log("Admin data:", JSON.stringify(adminData));
+    console.log("Admin check result:", { adminData, adminError });
 
-    if (!Array.isArray(adminData) || adminData.length === 0) {
+    if (adminError || !adminData) {
       console.error("User is not a super admin");
       return new Response(
         JSON.stringify({
@@ -154,34 +136,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Criar usuário no auth.users usando Admin API
     console.log("Creating user in auth.users...");
-    const createUserRes = await fetch(
-      `${SUPABASE_URL}/auth/v1/admin/users`,
-      {
-        method: "POST",
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          email_confirm: true,
-        }),
-      }
-    );
+    const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
 
-    console.log("User creation status:", createUserRes.status);
+    console.log("User creation result:", { newUser, createUserError });
 
-    if (!createUserRes.ok) {
-      const errorData = await createUserRes.json();
-      console.error("User creation failed:", JSON.stringify(errorData));
+    if (createUserError || !newUser.user) {
+      console.error("User creation failed:", createUserError);
       return new Response(
         JSON.stringify({
           error: "Erro ao criar usuário",
-          details: errorData.msg || errorData.message || "Unknown error",
+          details: createUserError?.message || "Unknown error",
         }),
         {
           status: 400,
@@ -190,11 +159,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const userData = await createUserRes.json();
-    const newUserId = userData.id;
+    const newUserId = newUser.user.id;
     console.log("User created successfully with ID:", newUserId);
 
-    // Inserir empresa na tabela companies
     console.log("Inserting company into database...");
     const companyData = {
       name,
@@ -206,44 +173,22 @@ Deno.serve(async (req: Request) => {
     };
     console.log("Company data to insert:", JSON.stringify(companyData));
 
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/companies`, {
-      method: "POST",
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(companyData),
-    });
+    const { error: insertError } = await supabaseAdmin
+      .from("companies")
+      .insert(companyData);
 
-    console.log("Company insertion status:", insertRes.status);
+    console.log("Company insertion result:", { insertError });
 
-    if (!insertRes.ok) {
-      const errorText = await insertRes.text();
-      console.error("Company insertion failed. Status:", insertRes.status, "Response:", errorText);
+    if (insertError) {
+      console.error("Company insertion failed:", insertError);
 
-      // Deletar usuário se inserção falhar
       console.log("Rolling back: deleting user...");
-      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${newUserId}`, {
-        method: "DELETE",
-        headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        },
-      });
-
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { message: errorText };
-      }
+      await supabaseAdmin.auth.admin.deleteUser(newUserId);
 
       return new Response(
         JSON.stringify({
           error: "Erro ao inserir empresa",
-          details: errorData.message || errorData.msg || "Unknown error",
+          details: insertError.message || "Unknown error",
         }),
         {
           status: 400,
