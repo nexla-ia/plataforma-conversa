@@ -313,6 +313,16 @@ export default function CompanyDashboard() {
     try {
       const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('instancia')
+        .eq('numero', selectedContact)
+        .eq('apikey_instancia', company.api_key)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const instanciaValue = existingMessages?.[0]?.instancia || company.name;
+
       const newMessage = {
         numero: selectedContact,
         sender: selectedContact,
@@ -320,7 +330,7 @@ export default function CompanyDashboard() {
         pushname: company.name,
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
-        instancia: company.name,
+        instancia: instanciaValue,
         idmessage: generatedIdMessage,
         ...messageData,
       };
@@ -349,7 +359,7 @@ export default function CompanyDashboard() {
           idmessage: generatedIdMessage,
           pushname: company.name,
           timestamp: timestamp,
-          instancia: company.name,
+          instancia: instanciaValue,
           apikey_instancia: company.api_key,
         };
 
