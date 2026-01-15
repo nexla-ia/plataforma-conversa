@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, RefreshCw, AlertCircle, CheckCheck, FileText, Download, User, Menu, X } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, RefreshCw, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile } from 'lucide-react';
 
 interface Contact {
   phoneNumber: string;
@@ -21,7 +21,12 @@ export default function CompanyDashboard() {
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -202,6 +207,114 @@ export default function CompanyDashboard() {
       setSelectedContact(contacts[0].phoneNumber);
     }
   }, [contacts.length, selectedContact]);
+
+  const sendMessage = async (messageData: Partial<Message>) => {
+    if (!company || !selectedContact) return;
+
+    setSending(true);
+    try {
+      const newMessage = {
+        numero: selectedContact,
+        sender: selectedContact,
+        number: getPhoneNumber(selectedContact),
+        minha: 'true',
+        pushname: company.name,
+        apikey_instancia: company.api_key,
+        date_time: new Date().toISOString(),
+        instancia: company.name,
+        idmessage: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        ...messageData,
+      };
+
+      const { error } = await supabase
+        .from('messages')
+        .insert([newMessage]);
+
+      if (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        alert('Erro ao enviar mensagem');
+      } else {
+        setMessageText('');
+        setTimeout(scrollToBottom, 100);
+      }
+    } catch (err) {
+      console.error('Erro ao enviar mensagem:', err);
+      alert('Erro ao enviar mensagem');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || sending) return;
+
+    await sendMessage({
+      message: messageText.trim(),
+      tipomessage: 'conversation',
+    });
+  };
+
+  const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
+    if (!company || !selectedContact) return;
+
+    setUploadingFile(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+      const filePath = `${company.api_key}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('message-files')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Erro ao fazer upload:', uploadError);
+        alert('Erro ao fazer upload do arquivo');
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('message-files')
+        .getPublicUrl(filePath);
+
+      const messageData: Partial<Message> = {
+        tipomessage: type === 'image' ? 'imageMessage' : type === 'audio' ? 'audioMessage' : 'documentMessage',
+        mimetype: file.type,
+      };
+
+      if (type === 'image') {
+        messageData.urlimagem = publicUrl;
+        messageData.message = 'Imagem';
+      } else if (type === 'document') {
+        messageData.urlpdf = publicUrl;
+        messageData.message = file.name;
+      } else if (type === 'audio') {
+        messageData.urlpdf = publicUrl;
+        messageData.message = 'Áudio';
+      }
+
+      await sendMessage(messageData);
+    } catch (err) {
+      console.error('Erro ao fazer upload:', err);
+      alert('Erro ao fazer upload do arquivo');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'image');
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'document');
+    }
+  };
 
   if (loading && !error) {
     return (
@@ -451,6 +564,86 @@ export default function CompanyDashboard() {
                 ))}
                 <div ref={messagesEndRef} />
               </div>
+            </div>
+
+            <div className="bg-[#202c33] px-4 py-3 border-t border-[#2a3942]">
+              <div className="flex items-end gap-2">
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploadingFile || sending}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition disabled:opacity-50"
+                    title="Enviar imagem"
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFile || sending}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition disabled:opacity-50"
+                    title="Enviar arquivo"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 bg-[#2a3942] rounded-lg flex items-center px-3 py-2">
+                  <button
+                    className="p-1 text-gray-400 hover:text-white transition"
+                    title="Emoji"
+                  >
+                    <Smile className="w-5 h-5" />
+                  </button>
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder="Digite uma mensagem"
+                    disabled={sending || uploadingFile}
+                    className="flex-1 bg-transparent text-gray-100 px-3 py-1 focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!messageText.trim() || sending || uploadingFile}
+                  className="p-3 bg-teal-600 hover:bg-teal-700 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Enviar mensagem"
+                >
+                  {sending || uploadingFile ? (
+                    <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5 text-white" />
+                  )}
+                </button>
+              </div>
+
+              {uploadingFile && (
+                <div className="mt-2 text-center">
+                  <p className="text-xs text-gray-400">Enviando arquivo...</p>
+                </div>
+              )}
             </div>
           </>
         ) : (
