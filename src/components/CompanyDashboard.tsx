@@ -173,8 +173,8 @@ export default function CompanyDashboard() {
         ...(receivedResult.data || []),
         ...(sentResult.data || [])
       ].sort((a, b) => {
-        const dateA = a.date_time ? new Date(a.date_time).getTime() : 0;
-        const dateB = b.date_time ? new Date(b.date_time).getTime() : 0;
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
         return dateA - dateB;
       });
 
