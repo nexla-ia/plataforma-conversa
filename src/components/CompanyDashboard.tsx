@@ -350,6 +350,7 @@ export default function CompanyDashboard() {
           pushname: company.name,
           timestamp: timestamp,
           instancia: company.name,
+          apikey_instancia: company.api_key,
         };
 
         const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
