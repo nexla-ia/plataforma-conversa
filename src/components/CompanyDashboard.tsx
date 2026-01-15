@@ -36,22 +36,47 @@ export default function CompanyDashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const detectBase64Type = (base64: string): 'image' | 'audio' | 'document' | null => {
-    if (!base64) return null;
+  const detectMessageType = (msg: Message): 'text' | 'image' | 'audio' | 'document' | null => {
+    if (msg.tipomessage) {
+      const tipo = msg.tipomessage.toLowerCase();
 
-    if (base64.startsWith('data:image/') || base64.startsWith('/9j/') || base64.startsWith('iVBORw0KGgo')) {
-      return 'image';
+      if (tipo === 'imagemessage' || tipo === 'image') {
+        return 'image';
+      }
+
+      if (tipo === 'audiomessage' || tipo === 'audio' || tipo === 'ptt') {
+        return 'audio';
+      }
+
+      if (tipo === 'documentmessage' || tipo === 'document') {
+        return 'document';
+      }
+
+      if (tipo === 'text' || tipo === 'conversation') {
+        return 'text';
+      }
     }
 
-    if (base64.startsWith('data:audio/') || base64.includes('audio/mpeg') || base64.includes('audio/ogg')) {
-      return 'audio';
-    }
+    if (msg.urlimagem) return 'image';
+    if (msg.urlpdf) return 'document';
 
-    if (base64.startsWith('data:application/pdf') || base64.startsWith('JVBERi0')) {
+    if (msg.base64) {
+      if (msg.base64.startsWith('data:image/') || msg.base64.startsWith('/9j/') || msg.base64.startsWith('iVBORw0KGgo')) {
+        return 'image';
+      }
+
+      if (msg.base64.startsWith('data:audio/') || msg.base64.includes('audio/mpeg') || msg.base64.includes('audio/ogg')) {
+        return 'audio';
+      }
+
+      if (msg.base64.startsWith('data:application/pdf') || msg.base64.startsWith('JVBERi0')) {
+        return 'document';
+      }
+
       return 'document';
     }
 
-    return 'document';
+    return msg.message ? 'text' : null;
   };
 
   const normalizeBase64 = (base64: string, type: 'image' | 'audio' | 'document'): string => {
@@ -565,8 +590,7 @@ export default function CompanyDashboard() {
                     <div className="space-y-2">
                       {msgs.map((msg) => {
                         const isSentMessage = msg['minha?'] === 'true';
-                        const base64Type = msg.base64 ? detectBase64Type(msg.base64) : null;
-                        const hasBase64Content = msg.base64 && base64Type;
+                        const messageType = detectMessageType(msg);
 
                         return (
                           <div
@@ -580,31 +604,19 @@ export default function CompanyDashboard() {
                                   : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
                               }`}
                             >
-                              {msg.urlimagem && !hasBase64Content && (
+                              {messageType === 'image' && (msg.urlimagem || msg.base64) && (
                                 <div className="p-1">
                                   <img
-                                    src={msg.urlimagem}
+                                    src={msg.urlimagem || normalizeBase64(msg.base64!, 'image')}
                                     alt="Imagem"
                                     className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
                                     style={{ maxHeight: '300px' }}
-                                    onClick={() => openImageModal(msg.urlimagem!)}
+                                    onClick={() => openImageModal(msg.urlimagem || normalizeBase64(msg.base64!, 'image'))}
                                   />
                                 </div>
                               )}
 
-                              {hasBase64Content && base64Type === 'image' && (
-                                <div className="p-1">
-                                  <img
-                                    src={normalizeBase64(msg.base64!, 'image')}
-                                    alt="Imagem"
-                                    className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition"
-                                    style={{ maxHeight: '300px' }}
-                                    onClick={() => openImageModal(normalizeBase64(msg.base64!, 'image'))}
-                                  />
-                                </div>
-                              )}
-
-                              {hasBase64Content && base64Type === 'audio' && (
+                              {messageType === 'audio' && msg.base64 && (
                                 <div className="p-3">
                                   <div className={`flex items-center gap-3 p-3 rounded-xl ${
                                     isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
@@ -634,52 +646,50 @@ export default function CompanyDashboard() {
                                 </div>
                               )}
 
-                              {hasBase64Content && base64Type === 'document' && (
+                              {messageType === 'document' && (msg.base64 || msg.urlpdf) && (
                                 <div className="p-2">
-                                  <button
-                                    onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
-                                    className={`flex items-center gap-2 p-2.5 rounded-xl w-full ${
-                                      isSentMessage ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-50 hover:bg-gray-100'
-                                    } transition`}
-                                  >
-                                    <FileText className="w-8 h-8 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0 text-left">
-                                      <p className="text-sm font-medium truncate">
-                                        {msg.message || 'Documento'}
-                                      </p>
-                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
-                                        Clique para baixar
-                                      </p>
-                                    </div>
-                                    <Download className="w-5 h-5 flex-shrink-0" />
-                                  </button>
+                                  {msg.base64 ? (
+                                    <button
+                                      onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
+                                      className={`flex items-center gap-2 p-2.5 rounded-xl w-full ${
+                                        isSentMessage ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-50 hover:bg-gray-100'
+                                      } transition`}
+                                    >
+                                      <FileText className="w-8 h-8 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <p className="text-sm font-medium truncate">
+                                          {msg.message || 'Documento'}
+                                        </p>
+                                        <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                          Clique para baixar
+                                        </p>
+                                      </div>
+                                      <Download className="w-5 h-5 flex-shrink-0" />
+                                    </button>
+                                  ) : (
+                                    <a
+                                      href={msg.urlpdf!}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`flex items-center gap-2 p-2.5 rounded-xl ${
+                                        isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
+                                      } hover:opacity-90 transition`}
+                                    >
+                                      <FileText className="w-8 h-8 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {msg.message || 'Documento'}
+                                        </p>
+                                        <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                          Clique para abrir
+                                        </p>
+                                      </div>
+                                    </a>
+                                  )}
                                 </div>
                               )}
 
-                              {msg.urlpdf && !hasBase64Content && (
-                                <div className="p-2">
-                                  <a
-                                    href={msg.urlpdf}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`flex items-center gap-2 p-2.5 rounded-xl ${
-                                      isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
-                                    } hover:opacity-90 transition`}
-                                  >
-                                    <FileText className="w-8 h-8 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium truncate">
-                                        {msg.message || 'Documento'}
-                                      </p>
-                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
-                                        Clique para abrir
-                                      </p>
-                                    </div>
-                                  </a>
-                                </div>
-                              )}
-
-                              {msg.message && !msg.urlpdf && !hasBase64Content && (
+                              {messageType === 'text' && msg.message && (
                                 <div className="px-3.5 py-2">
                                   <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">
                                     {msg.message}
