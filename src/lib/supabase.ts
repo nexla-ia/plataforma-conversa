@@ -22,11 +22,11 @@ export interface Company {
 
 export interface Message {
   id: string;
-  number: string | null;
+  number?: string | null;
   instancia: string | null;
   numero: string | null;
   idmessage: string | null;
-  minha: string | null;
+  'minha?': string | null;
   pushname: string | null;
   tipomessage: string | null;
   timestamp: string | null;

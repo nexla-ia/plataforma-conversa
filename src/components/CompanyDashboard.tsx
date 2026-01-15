@@ -217,7 +217,7 @@ export default function CompanyDashboard() {
         numero: selectedContact,
         sender: selectedContact,
         number: getPhoneNumber(selectedContact),
-        minha: 'true',
+        'minha?': 'true',
         pushname: company.name,
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
@@ -474,87 +474,94 @@ export default function CompanyDashboard() {
             </header>
 
             <div
-              className="flex-1 overflow-y-auto bg-[#0b141a] px-4 py-6"
+              className="flex-1 overflow-y-auto bg-gray-100 px-4 py-6"
               style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath opacity='.5' d='M96 95h4v1h-4v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4h-9v4h-1v-4H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15v-9H0v-1h15V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h9V0h1v15h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9h4v1h-4v9zm-1 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-10 0v-9h-9v9h9zm-9-10h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9zm10 0h9v-9h-9v9z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
               }}
             >
               <div className="max-w-4xl mx-auto space-y-6">
                 {Object.entries(messageGroups).map(([date, msgs]) => (
                   <div key={date}>
                     <div className="flex justify-center mb-4">
-                      <div className="bg-[#202c33] px-3 py-1.5 rounded-lg shadow-sm">
-                        <p className="text-xs text-gray-300 font-medium">{date}</p>
+                      <div className="bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-200">
+                        <p className="text-xs text-gray-600 font-medium">{date}</p>
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {msgs.map((msg) => {
-                        const isMyMessage = msg.minha === 'true';
+                        const isMyMessage = msg['minha?'] === 'true';
                         return (
                           <div
                             key={msg.id}
                             className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
-                              className={`max-w-[65%] rounded-lg shadow-md ${
+                              className={`max-w-[70%] rounded-lg shadow-sm ${
                                 isMyMessage
-                                  ? 'bg-[#005c4b] text-white'
-                                  : 'bg-[#202c33] text-gray-100'
+                                  ? 'bg-teal-600 text-white'
+                                  : 'bg-white text-gray-900'
                               }`}
                             >
+                              {!isMyMessage && msg.pushname && (
+                                <div className="px-3 pt-2">
+                                  <p className="text-xs font-semibold text-teal-600">{msg.pushname}</p>
+                                </div>
+                              )}
+
                               {msg.urlimagem && (
-                                <div className="px-1 pt-1">
+                                <div className="p-1">
                                   <img
                                     src={msg.urlimagem}
                                     alt="Imagem"
-                                    className="rounded-lg max-w-full h-auto"
-                                    style={{ maxHeight: '400px' }}
+                                    className="rounded-md max-w-full h-auto cursor-pointer hover:opacity-90 transition"
+                                    style={{ maxHeight: '350px' }}
+                                    onClick={() => window.open(msg.urlimagem!, '_blank')}
                                   />
                                 </div>
                               )}
 
                               {msg.urlpdf && (
-                                <div className="px-3 py-2">
+                                <div className="p-2">
                                   <a
                                     href={msg.urlpdf}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className={`flex items-center gap-2 p-2 rounded-lg ${
-                                      isMyMessage ? 'bg-[#004a3d]' : 'bg-[#2a3942]'
-                                    } hover:opacity-80 transition`}
+                                    className={`flex items-center gap-3 p-3 rounded-md ${
+                                      isMyMessage ? 'bg-teal-700' : 'bg-gray-100'
+                                    } hover:opacity-90 transition`}
                                   >
-                                    <FileText className="w-10 h-10" />
-                                    <div className="flex-1">
-                                      <p className="text-sm font-medium">Documento PDF</p>
-                                      <p className="text-xs opacity-70">Clique para abrir</p>
+                                    <div className={`p-2 rounded-full ${isMyMessage ? 'bg-teal-800' : 'bg-gray-200'}`}>
+                                      <FileText className="w-5 h-5" />
                                     </div>
-                                    <Download className="w-4 h-4" />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium truncate">
+                                        {msg.message || 'Documento'}
+                                      </p>
+                                      <p className={`text-xs ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                        Clique para abrir
+                                      </p>
+                                    </div>
+                                    <Download className="w-4 h-4 flex-shrink-0" />
                                   </a>
                                 </div>
                               )}
 
-                              {msg.message && (
+                              {msg.message && !msg.urlpdf && (
                                 <div className="px-3 py-2">
-                                  <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                                    {msg.message}
+                                  </p>
                                 </div>
                               )}
 
-                              <div className="px-3 pb-1.5 flex items-center justify-end gap-1">
-                                <span className="text-xs opacity-60">
+                              <div className="px-3 pb-2 flex items-center justify-end gap-1.5">
+                                <span className={`text-[11px] ${isMyMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                   {formatTime(msg.date_time || msg.created_at)}
                                 </span>
                                 {isMyMessage && (
-                                  <CheckCheck className="w-4 h-4 text-blue-400" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-teal-100" />
                                 )}
                               </div>
-
-                              {msg.idmessage && (
-                                <div className="px-3 pb-2">
-                                  <span className="text-[10px] opacity-40 font-mono">
-                                    ID: {msg.idmessage.substring(0, 15)}
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
                         );
@@ -566,8 +573,8 @@ export default function CompanyDashboard() {
               </div>
             </div>
 
-            <div className="bg-[#202c33] px-4 py-3 border-t border-[#2a3942]">
-              <div className="flex items-end gap-2">
+            <div className="bg-white px-4 py-3 border-t border-gray-200">
+              <div className="flex items-center gap-2">
                 <input
                   type="file"
                   ref={imageInputRef}
@@ -583,32 +590,24 @@ export default function CompanyDashboard() {
                   className="hidden"
                 />
 
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploadingFile || sending}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition disabled:opacity-50"
-                    title="Enviar imagem"
-                  >
-                    <ImageIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingFile || sending}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-[#2a3942] rounded-full transition disabled:opacity-50"
-                    title="Enviar arquivo"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadingFile || sending}
+                  className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
+                  title="Enviar imagem"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile || sending}
+                  className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
+                  title="Enviar arquivo"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
 
-                <div className="flex-1 bg-[#2a3942] rounded-lg flex items-center px-3 py-2">
-                  <button
-                    className="p-1 text-gray-400 hover:text-white transition"
-                    title="Emoji"
-                  >
-                    <Smile className="w-5 h-5" />
-                  </button>
+                <div className="flex-1 bg-gray-100 rounded-full flex items-center px-4 py-2">
                   <input
                     type="text"
                     value={messageText}
@@ -621,14 +620,20 @@ export default function CompanyDashboard() {
                     }}
                     placeholder="Digite uma mensagem"
                     disabled={sending || uploadingFile}
-                    className="flex-1 bg-transparent text-gray-100 px-3 py-1 focus:outline-none disabled:opacity-50"
+                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-500 focus:outline-none disabled:opacity-50"
                   />
+                  <button
+                    className="p-1 text-gray-500 hover:text-teal-600 transition ml-1"
+                    title="Emoji"
+                  >
+                    <Smile className="w-5 h-5" />
+                  </button>
                 </div>
 
                 <button
                   onClick={handleSendMessage}
                   disabled={!messageText.trim() || sending || uploadingFile}
-                  className="p-3 bg-teal-600 hover:bg-teal-700 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-3 bg-teal-600 hover:bg-teal-700 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                   title="Enviar mensagem"
                 >
                   {sending || uploadingFile ? (
@@ -641,7 +646,7 @@ export default function CompanyDashboard() {
 
               {uploadingFile && (
                 <div className="mt-2 text-center">
-                  <p className="text-xs text-gray-400">Enviando arquivo...</p>
+                  <p className="text-xs text-gray-600">Enviando arquivo...</p>
                 </div>
               )}
             </div>
