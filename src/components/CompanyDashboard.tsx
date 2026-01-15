@@ -173,8 +173,8 @@ export default function CompanyDashboard() {
         ...(receivedResult.data || []),
         ...(sentResult.data || [])
       ].sort((a, b) => {
-        const dateA = a.date_time ? new Date(a.date_time).getTime() : 0;
-        const dateB = b.date_time ? new Date(b.date_time).getTime() : 0;
+        const dateA = new Date(a.date_time || a.timestamp || a.created_at || 0).getTime();
+        const dateB = new Date(b.date_time || b.timestamp || b.created_at || 0).getTime();
         return dateA - dateB;
       });
 
@@ -294,14 +294,14 @@ export default function CompanyDashboard() {
 
     const contacts = Object.values(contactsMap).map((contact) => {
       contact.messages.sort((a, b) => {
-        const dateA = new Date(a.date_time || a.created_at || 0).getTime();
-        const dateB = new Date(b.date_time || b.created_at || 0).getTime();
+        const dateA = new Date(a.date_time || a.timestamp || a.created_at || 0).getTime();
+        const dateB = new Date(b.date_time || b.timestamp || b.created_at || 0).getTime();
         return dateA - dateB;
       });
 
       const lastMsg = contact.messages[contact.messages.length - 1];
       contact.lastMessage = lastMsg.message || (lastMsg.urlimagem ? 'Imagem' : (lastMsg.urlpdf ? 'Documento' : 'Mensagem'));
-      contact.lastMessageTime = lastMsg.date_time || lastMsg.created_at || '';
+      contact.lastMessageTime = lastMsg.date_time || lastMsg.timestamp || lastMsg.created_at || '';
       contact.name = getContactName(lastMsg);
 
       return contact;
