@@ -212,11 +212,19 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (e) {
-    console.error("Error in create-company:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    const errorStack = e instanceof Error ? e.stack : '';
+
+    console.error("Error in create-company:", {
+      message: errorMessage,
+      stack: errorStack,
+      error: e
+    });
+
     return new Response(
       JSON.stringify({
         error: "Internal server error",
-        details: e instanceof Error ? e.message : String(e),
+        details: errorMessage,
       }),
       {
         status: 500,
