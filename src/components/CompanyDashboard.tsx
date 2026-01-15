@@ -625,7 +625,8 @@ export default function CompanyDashboard() {
                                 </div>
                               )}
 
-                              {hasBase64Content && (base64Type === 'audio' || tipoFromField === 'audio') && (
+                              {hasBase64Content && (base64Type === 'audio' || tipoFromField === 'audio') &&
+                                base64Type !== 'image' && tipoFromField !== 'image' && (
                                 <div className="p-3">
                                   <div className={`flex items-center gap-3 p-3 rounded-xl ${
                                     isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
@@ -655,7 +656,9 @@ export default function CompanyDashboard() {
                                 </div>
                               )}
 
-                              {hasBase64Content && (base64Type === 'document' || tipoFromField === 'document') && (
+                              {hasBase64Content && (base64Type === 'document' || tipoFromField === 'document') &&
+                                base64Type !== 'audio' && tipoFromField !== 'audio' &&
+                                base64Type !== 'image' && tipoFromField !== 'image' && (
                                 <div className="p-2">
                                   <button
                                     onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
