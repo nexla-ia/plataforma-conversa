@@ -217,7 +217,7 @@ export default function CompanyDashboard() {
         numero: selectedContact,
         sender: selectedContact,
         number: getPhoneNumber(selectedContact),
-        'minha?': 'true',
+        'minha?': 'false',
         pushname: company.name,
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
@@ -487,7 +487,7 @@ export default function CompanyDashboard() {
                     </div>
                     <div className="space-y-2">
                       {msgs.map((msg) => {
-                        const isMyMessage = msg['minha?'] === 'true';
+                        const isMyMessage = msg['minha?'] !== 'true';
                         return (
                           <div
                             key={msg.id}
