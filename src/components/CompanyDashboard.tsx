@@ -330,10 +330,37 @@ export default function CompanyDashboard() {
       if (error) {
         console.error('Erro ao enviar mensagem:', error);
         alert('Erro ao enviar mensagem');
-      } else {
-        setMessageText('');
-        setTimeout(scrollToBottom, 100);
+        return;
       }
+
+      try {
+        const webhookPayload = {
+          numero: getPhoneNumber(selectedContact),
+          apikey: company.api_key,
+          message: messageData.message || '',
+          tipomessage: messageData.tipomessage || 'conversation',
+          base64: messageData.base64 || null,
+          urlimagem: messageData.urlimagem || null,
+          urlpdf: messageData.urlpdf || null,
+        };
+
+        const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookPayload),
+        });
+
+        if (!webhookResponse.ok) {
+          console.error('Erro ao enviar para webhook:', webhookResponse.status);
+        }
+      } catch (webhookError) {
+        console.error('Erro ao chamar webhook:', webhookError);
+      }
+
+      setMessageText('');
+      setTimeout(scrollToBottom, 100);
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
       alert('Erro ao enviar mensagem');
