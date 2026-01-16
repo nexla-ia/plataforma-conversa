@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User } from "lucide-react";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw } from "lucide-react";
 
 type Company = {
   id: string;
@@ -43,6 +43,13 @@ export default function SuperAdminDashboard() {
 
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [messageText, setMessageText] = useState("");
+  const [imageCaption, setImageCaption] = useState("");
+  const [sending, setSending] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // form
   const [name, setName] = useState("");
@@ -230,6 +237,173 @@ export default function SuperAdminDashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const sendMessage = async (messageData: Partial<Message>, apiKey: string) => {
+    if (!selectedChat) return;
+
+    setSending(true);
+    try {
+      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('instancia, company_id')
+        .eq('numero', selectedChat)
+        .eq('apikey_instancia', apiKey)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const instanciaValue = existingMessages?.[0]?.instancia || 'Admin';
+      const companyId = existingMessages?.[0]?.company_id;
+
+      const newMessage = {
+        numero: selectedChat,
+        sender: selectedChat,
+        'minha?': 'true',
+        pushname: 'Admin',
+        apikey_instancia: apiKey,
+        date_time: new Date().toISOString(),
+        instancia: instanciaValue,
+        idmessage: generatedIdMessage,
+        company_id: companyId,
+        ...messageData,
+      };
+
+      const { error } = await supabase
+        .from('sent_messages')
+        .insert([newMessage]);
+
+      if (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        alert('Erro ao enviar mensagem');
+        return;
+      }
+
+      try {
+        const timestamp = new Date().toISOString();
+
+        const webhookPayload = {
+          numero: selectedChat,
+          message: messageData.message || '',
+          tipomessage: messageData.tipomessage || 'conversation',
+          base64: messageData.base64 || null,
+          urlimagem: messageData.urlimagem || null,
+          urlpdf: messageData.urlpdf || null,
+          caption: messageData.caption || null,
+          idmessage: generatedIdMessage,
+          pushname: 'Admin',
+          timestamp: timestamp,
+          instancia: instanciaValue,
+          apikey_instancia: apiKey,
+        };
+
+        await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookPayload),
+        });
+      } catch (webhookError) {
+        console.error('Erro ao chamar webhook:', webhookError);
+      }
+
+      setMessageText('');
+      await loadMessages();
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      console.error('Erro ao enviar mensagem:', err);
+      alert('Erro ao enviar mensagem');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || sending || !selectedChat) return;
+
+    const selectedChatData = filteredChats.find(c => c.numero === selectedChat);
+    if (!selectedChatData || selectedChatData.messages.length === 0) return;
+
+    const apiKey = selectedChatData.messages[0].apikey_instancia;
+
+    await sendMessage({
+      message: messageText.trim(),
+      tipomessage: 'conversation',
+    }, apiKey);
+  };
+
+  const handleFileUpload = async (file: File, type: 'image' | 'document') => {
+    if (!selectedChat) return;
+
+    const selectedChatData = filteredChats.find(c => c.numero === selectedChat);
+    if (!selectedChatData || selectedChatData.messages.length === 0) return;
+
+    const apiKey = selectedChatData.messages[0].apikey_instancia;
+
+    setUploadingFile(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+      const filePath = `${apiKey}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('message-files')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Erro ao fazer upload:', uploadError);
+        alert('Erro ao fazer upload do arquivo');
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('message-files')
+        .getPublicUrl(filePath);
+
+      const messageData: Partial<Message> = {
+        tipomessage: type === 'image' ? 'imageMessage' : 'documentMessage',
+        mimetype: file.type,
+      };
+
+      if (type === 'image') {
+        messageData.urlimagem = publicUrl;
+        messageData.message = imageCaption || 'Imagem';
+        if (imageCaption) {
+          messageData.caption = imageCaption;
+        }
+      } else {
+        messageData.urlpdf = publicUrl;
+        messageData.message = file.name;
+      }
+
+      await sendMessage(messageData, apiKey);
+      setImageCaption('');
+    } catch (err) {
+      console.error('Erro ao fazer upload:', err);
+      alert('Erro ao fazer upload do arquivo');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'image');
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'document');
+    }
   };
 
   const groupMessagesByContact = () => {
@@ -502,46 +676,87 @@ export default function SuperAdminDashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-slate-800/50 rounded-2xl border border-cyan-500/20 overflow-hidden backdrop-blur-sm">
                 {companies.length === 0 && (
-                  <div className="col-span-full text-center py-16 text-slate-400">
+                  <div className="text-center py-16 text-slate-400">
                     Nenhuma empresa cadastrada.
                   </div>
                 )}
 
-                {companies.map((c, index) => (
-                  <div
-                    key={c.id}
-                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm hover:scale-105 animate-fadeIn"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="text-xl font-semibold text-white">{c.name}</div>
-                      {c.is_super_admin && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 font-medium">
-                          Admin
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-3 text-sm">
-                      <div className="flex items-center gap-3 text-slate-300">
-                        <span className="text-cyan-400">📞</span>
-                        <span>{c.phone_number}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-slate-300">
-                        <span className="text-cyan-400">✉️</span>
-                        <span className="break-all">{c.email}</span>
-                      </div>
-                      <div className="flex items-start gap-3 mt-4 pt-4 border-t border-slate-700/50">
-                        <span className="text-cyan-400">🔑</span>
-                        <span className="break-all text-xs font-mono text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
-                          {c.api_key}
-                        </span>
-                      </div>
-                    </div>
+                {companies.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-900/50 border-b border-cyan-500/20">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Nome
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Telefone
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            API Key
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Email
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            User ID
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Super Admin
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-700/50">
+                        {companies.map((c, index) => (
+                          <tr
+                            key={c.id}
+                            className="hover:bg-slate-700/30 transition-colors animate-fadeIn"
+                            style={{ animationDelay: `${index * 0.05}s` }}
+                          >
+                            <td className="px-6 py-4 text-sm text-white font-medium">
+                              {c.name}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-300">
+                              {c.phone_number}
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                              <div className="max-w-xs truncate bg-slate-900/50 px-2 py-1 rounded">
+                                {c.api_key}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-300">
+                              <div className="max-w-xs truncate">
+                                {c.email}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                              {c.user_id ? (
+                                <div className="max-w-xs truncate">
+                                  {c.user_id}
+                                </div>
+                              ) : (
+                                <span className="text-slate-500">null</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              {c.is_super_admin ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30">
+                                  true
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 border border-slate-600/30">
+                                  false
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
+                )}
               </div>
             </>
           )}
@@ -626,32 +841,145 @@ export default function SuperAdminDashboard() {
                     <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-br from-slate-900/30 to-slate-800/30">
                       {filteredChats
                         .find((c) => c.numero === selectedChat)
-                        ?.messages.map((msg, index) => (
-                          <div
-                            key={msg.id}
-                            className="flex animate-slideUp"
-                            style={{ animationDelay: `${index * 0.05}s` }}
-                          >
-                            <div className="max-w-[70%] bg-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-3 border border-cyan-500/20 shadow-lg backdrop-blur-sm">
-                              <p className="text-white text-sm leading-relaxed break-words">
-                                {msg.caption || msg.message}
-                              </p>
-                              <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
-                                <span>
-                                  {msg.created_at
-                                    ? new Date(msg.created_at).toLocaleString("pt-BR", {
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit"
-                                      })
-                                    : ""}
-                                </span>
+                        ?.messages.map((msg, index) => {
+                          const isSentMessage = msg['minha?'] === 'true';
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`flex animate-slideUp ${isSentMessage ? 'justify-end' : 'justify-start'}`}
+                              style={{ animationDelay: `${index * 0.05}s` }}
+                            >
+                              <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-lg backdrop-blur-sm ${
+                                isSentMessage
+                                  ? 'bg-cyan-600/80 rounded-br-sm border border-cyan-500/30'
+                                  : 'bg-slate-700/50 rounded-tl-sm border border-cyan-500/20'
+                              }`}>
+                                {msg.urlimagem && (
+                                  <div className="mb-2">
+                                    <img
+                                      src={msg.urlimagem}
+                                      alt="Imagem"
+                                      className="rounded-xl max-w-full h-auto"
+                                      style={{ maxHeight: '300px' }}
+                                    />
+                                  </div>
+                                )}
+                                {(msg.message || msg.caption) && (
+                                  <p className="text-white text-sm leading-relaxed break-words">
+                                    {msg.caption || msg.message}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2 text-xs text-slate-300">
+                                  <span>
+                                    {msg.created_at || msg.date_time
+                                      ? new Date(msg.created_at || msg.date_time).toLocaleString("pt-BR", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit"
+                                        })
+                                      : ""}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    <div className="p-4 bg-slate-900/50 border-t border-cyan-500/20">
+                      {imageCaption && (
+                        <div className="mb-2 px-3 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
+                          <p className="text-xs text-cyan-300 mb-1">Legenda da imagem:</p>
+                          <p className="text-sm text-white">{imageCaption}</p>
+                          <button
+                            onClick={() => setImageCaption('')}
+                            className="text-xs text-red-400 hover:text-red-300 mt-1"
+                          >
+                            Remover legenda
+                          </button>
+                        </div>
+                      )}
+                      <div className="mb-2">
+                        <input
+                          type="text"
+                          value={imageCaption}
+                          onChange={(e) => setImageCaption(e.target.value)}
+                          placeholder="Legenda para imagem (opcional)"
+                          className="w-full px-3 py-2 text-sm bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          ref={imageInputRef}
+                          accept="image/*"
+                          onChange={handleImageSelect}
+                          className="hidden"
+                        />
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          accept=".pdf,.doc,.docx,.txt"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+
+                        <button
+                          onClick={() => imageInputRef.current?.click()}
+                          disabled={uploadingFile || sending}
+                          className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50"
+                          title="Enviar imagem"
+                        >
+                          <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingFile || sending}
+                          className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50"
+                          title="Enviar arquivo"
+                        >
+                          <Paperclip className="w-5 h-5" />
+                        </button>
+
+                        <div className="flex-1 bg-slate-800/50 rounded-lg flex items-center px-4 py-2.5 border border-slate-600 focus-within:border-cyan-500 transition">
+                          <input
+                            type="text"
+                            value={messageText}
+                            onChange={(e) => setMessageText(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                              }
+                            }}
+                            placeholder="Digite uma mensagem"
+                            disabled={sending || uploadingFile}
+                            className="flex-1 bg-transparent text-white placeholder-slate-400 focus:outline-none disabled:opacity-50 text-sm"
+                          />
+                        </div>
+
+                        <button
+                          onClick={handleSendMessage}
+                          disabled={!messageText.trim() || sending || uploadingFile}
+                          className="p-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/20"
+                          title="Enviar mensagem"
+                        >
+                          {sending || uploadingFile ? (
+                            <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                          ) : (
+                            <Send className="w-5 h-5 text-white" />
+                          )}
+                        </button>
+                      </div>
+
+                      {uploadingFile && (
+                        <div className="mt-2 text-center">
+                          <p className="text-xs text-slate-400">Enviando arquivo...</p>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
