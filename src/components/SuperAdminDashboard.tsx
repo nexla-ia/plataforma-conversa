@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw } from "lucide-react";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2 } from "lucide-react";
 
 type Company = {
   id: string;
@@ -49,6 +49,7 @@ export default function SuperAdminDashboard() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [showLogoutScreen, setShowLogoutScreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -331,8 +332,11 @@ export default function SuperAdminDashboard() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
+    setShowLogoutScreen(true);
+    setTimeout(async () => {
+      await supabase.auth.signOut();
+      window.location.href = "/";
+    }, 5000);
   };
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
@@ -575,6 +579,18 @@ export default function SuperAdminDashboard() {
   // =========================
   // UI
   // =========================
+  if (showLogoutScreen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-teal-500 animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Saindo...</h2>
+          <p className="text-gray-600 font-medium">Até logo!</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
