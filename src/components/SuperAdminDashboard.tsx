@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut } from "lucide-react";
 
 type Company = {
   id: string;
@@ -30,6 +31,7 @@ export default function SuperAdminDashboard() {
   const [userEmail, setUserEmail] = useState("");
   const [userId, setUserId] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("empresas");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -232,299 +234,356 @@ export default function SuperAdminDashboard() {
   // =========================
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-slate-600">Carregando...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="text-center">
+          <div className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
+            NEXLA
+          </div>
+          <div className="text-slate-400 animate-pulse">Carregando...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div>
-            <div className="text-lg font-semibold text-slate-900">Super Admin</div>
-            <div className="text-sm text-slate-500">Painel de Gerenciamento</div>
-            <div className="text-xs text-slate-400 mt-1">
-              {userEmail}
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+      <aside
+        className={`${
+          sidebarOpen ? "w-64" : "w-20"
+        } bg-slate-950 border-r border-cyan-500/20 transition-all duration-300 flex flex-col relative`}
+      >
+        <div className="p-6 border-b border-cyan-500/20">
+          <div className="flex items-center justify-between">
+            {sidebarOpen ? (
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                  NEXLA
+                </h1>
+                <p className="text-xs text-slate-400 mt-1">Admin Portal</p>
+              </div>
+            ) : (
+              <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                N
+              </div>
+            )}
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors"
-          >
-            Sair
-          </button>
         </div>
 
-        <div className="flex gap-1 px-6">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="absolute -right-3 top-20 bg-slate-950 border border-cyan-500/40 rounded-full p-1.5 text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+        >
+          {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
+        </button>
+
+        <nav className="flex-1 p-4 space-y-2">
           <button
             onClick={() => setActiveTab("empresas")}
-            className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
               activeTab === "empresas"
-                ? "border-emerald-600 text-emerald-600"
-                : "border-transparent text-slate-600 hover:text-slate-900"
+                ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30"
+                : "text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50"
             }`}
           >
-            Empresas ({companies.length})
+            <Building2 size={20} />
+            {sidebarOpen && (
+              <div className="flex-1 text-left">
+                <div className="font-medium">Empresas</div>
+                <div className="text-xs opacity-70">{companies.length} cadastradas</div>
+              </div>
+            )}
           </button>
+
           <button
             onClick={() => setActiveTab("mensagens")}
-            className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
               activeTab === "mensagens"
-                ? "border-emerald-600 text-emerald-600"
-                : "border-transparent text-slate-600 hover:text-slate-900"
+                ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30"
+                : "text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50"
             }`}
           >
-            Mensagens ({messages.length})
+            <MessageSquare size={20} />
+            {sidebarOpen && (
+              <div className="flex-1 text-left">
+                <div className="font-medium">Mensagens</div>
+                <div className="text-xs opacity-70">{messages.length} recebidas</div>
+              </div>
+            )}
           </button>
+        </nav>
+
+        <div className="p-4 border-t border-cyan-500/20">
+          <div className={`${sidebarOpen ? "" : "flex justify-center"}`}>
+            {sidebarOpen && (
+              <div className="mb-3">
+                <div className="text-xs text-slate-400 mb-1">Logado como</div>
+                <div className="text-sm text-slate-300 truncate">{userEmail}</div>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className={`${
+                sidebarOpen ? "w-full" : ""
+              } flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 transition-all`}
+            >
+              <LogOut size={18} />
+              {sidebarOpen && <span>Sair</span>}
+            </button>
+          </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="px-6 py-6">
-        {errorMsg && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMsg}
-          </div>
-        )}
-
-        {activeTab === "empresas" && (
-          <>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">Empresas Cadastradas</h2>
-
-              <button
-                onClick={() => setShowForm(true)}
-                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-white font-medium hover:bg-emerald-700 transition-colors"
-              >
-                + Nova Empresa
-              </button>
+      <main className="flex-1 overflow-auto">
+        <div className="p-8">
+          {errorMsg && (
+            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400 backdrop-blur-sm">
+              {errorMsg}
             </div>
+          )}
 
-            {showForm && (
-          <div className="mb-6 rounded-xl bg-white border border-slate-200 p-4">
-            <h3 className="text-lg font-semibold text-slate-900 mb-3">
-              Cadastrar Nova Empresa
-            </h3>
-
-            <form onSubmit={handleCreateCompany} className="grid gap-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {activeTab === "empresas" && (
+            <>
+              <div className="flex items-center justify-between mb-8">
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1">
-                    Nome da Empresa
-                  </label>
-                  <input
-                    required
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Minha Empresa"
-                  />
+                  <h2 className="text-3xl font-bold text-white mb-2">Empresas Cadastradas</h2>
+                  <p className="text-slate-400">Gerencie todas as empresas do sistema</p>
                 </div>
-
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1">
-                    Número de Telefone
-                  </label>
-                  <input
-                    required
-                    type="tel"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                    value={phone_number}
-                    onChange={handlePhoneChange}
-                    placeholder="(69) 99999-9999"
-                    maxLength={15}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1">
-                    Chave API
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      required
-                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2"
-                      value={api_key}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="UUID/chave"
-                    />
-                    <button
-                      type="button"
-                      onClick={generateApiKey}
-                      className="rounded-lg bg-slate-600 px-3 py-2 text-white text-sm hover:bg-slate-700"
-                    >
-                      Gerar
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    required
-                    type="email"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="empresa@dominio.com"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-slate-700 mb-1">
-                  Senha <span className="text-slate-500 text-xs">(mínimo 6 caracteres)</span>
-                </label>
-                <input
-                  required
-                  type="password"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="********"
-                  minLength={6}
-                />
-              </div>
-
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 disabled:opacity-60"
-                >
-                  {creating ? "Cadastrando..." : "Cadastrar Empresa"}
-                </button>
 
                 <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100"
+                  onClick={() => setShowForm(true)}
+                  className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium hover:from-cyan-600 hover:to-blue-700 transition-all shadow-lg shadow-cyan-500/20"
                 >
-                  Cancelar
+                  <Plus size={20} />
+                  Nova Empresa
                 </button>
               </div>
-            </form>
-          </div>
-        )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {companies.length === 0 && (
-                <div className="col-span-full text-center py-12 text-slate-500">
-                  Nenhuma empresa cadastrada.
+              {showForm && (
+                <div className="mb-8 rounded-2xl bg-slate-800/50 border border-cyan-500/20 p-6 backdrop-blur-sm">
+                  <h3 className="text-xl font-semibold text-white mb-6">
+                    Cadastrar Nova Empresa
+                  </h3>
+
+                  <form onSubmit={handleCreateCompany} className="grid gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">
+                          Nome da Empresa
+                        </label>
+                        <input
+                          required
+                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="Ex: Minha Empresa"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">
+                          Número de Telefone
+                        </label>
+                        <input
+                          required
+                          type="tel"
+                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          value={phone_number}
+                          onChange={handlePhoneChange}
+                          placeholder="(69) 99999-9999"
+                          maxLength={15}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">
+                          Chave API
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            required
+                            className="flex-1 rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-mono text-sm"
+                            value={api_key}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="UUID/chave"
+                          />
+                          <button
+                            type="button"
+                            onClick={generateApiKey}
+                            className="rounded-lg bg-slate-700 px-4 py-2 text-slate-300 text-sm hover:bg-slate-600 border border-slate-600 transition-colors"
+                          >
+                            Gerar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">
+                          Email
+                        </label>
+                        <input
+                          required
+                          type="email"
+                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="empresa@dominio.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-slate-300 mb-2">
+                        Senha <span className="text-slate-500 text-xs">(mínimo 6 caracteres)</span>
+                      </label>
+                      <input
+                        required
+                        type="password"
+                        className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="********"
+                        minLength={6}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-4">
+                      <button
+                        type="submit"
+                        disabled={creating}
+                        className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-2.5 text-white font-medium hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-500/20"
+                      >
+                        {creating ? "Cadastrando..." : "Cadastrar Empresa"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowForm(false)}
+                        className="rounded-lg border border-slate-600 px-6 py-2.5 text-slate-300 hover:bg-slate-800 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 
-              {companies.map((c) => (
-                <div
-                  key={c.id}
-                  className="rounded-xl bg-white border border-slate-200 p-5 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="text-lg font-semibold text-slate-900">{c.name}</div>
-                    {c.is_super_admin && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
-                        Admin
-                      </span>
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {companies.length === 0 && (
+                  <div className="col-span-full text-center py-16 text-slate-400">
+                    Nenhuma empresa cadastrada.
                   </div>
+                )}
 
-                  <div className="space-y-2 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">📞</span>
-                      <span>{c.phone_number}</span>
+                {companies.map((c) => (
+                  <div
+                    key={c.id}
+                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="text-xl font-semibold text-white">{c.name}</div>
+                      {c.is_super_admin && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 font-medium">
+                          Admin
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">✉️</span>
-                      <span className="break-all">{c.email}</span>
-                    </div>
-                    <div className="flex items-start gap-2 mt-3 pt-3 border-t border-slate-100">
-                      <span className="text-slate-400">🔑</span>
-                      <span className="break-all text-xs font-mono text-slate-500">{c.api_key}</span>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-center gap-3 text-slate-300">
+                        <span className="text-cyan-400">📞</span>
+                        <span>{c.phone_number}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-slate-300">
+                        <span className="text-cyan-400">✉️</span>
+                        <span className="break-all">{c.email}</span>
+                      </div>
+                      <div className="flex items-start gap-3 mt-4 pt-4 border-t border-slate-700/50">
+                        <span className="text-cyan-400">🔑</span>
+                        <span className="break-all text-xs font-mono text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
+                          {c.api_key}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+                ))}
+              </div>
+            </>
+          )}
 
-        {activeTab === "mensagens" && (
-          <>
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Mensagens Recebidas</h2>
-              <p className="text-sm text-slate-600">Últimas 100 mensagens do sistema</p>
-            </div>
+          {activeTab === "mensagens" && (
+            <>
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">Mensagens Recebidas</h2>
+                <p className="text-slate-400">Últimas 100 mensagens do sistema</p>
+              </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              {messages.length === 0 && (
-                <div className="text-center py-12 text-slate-500">
-                  Nenhuma mensagem encontrada.
-                </div>
-              )}
+              <div className="bg-slate-800/50 rounded-2xl border border-cyan-500/20 overflow-hidden backdrop-blur-sm">
+                {messages.length === 0 && (
+                  <div className="text-center py-16 text-slate-400">
+                    Nenhuma mensagem encontrada.
+                  </div>
+                )}
 
-              {messages.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          Data/Hora
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          Número
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          Nome
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          Tipo
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          Mensagem
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                          API Key
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {messages.map((msg) => (
-                        <tr key={msg.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                            {msg.created_at
-                              ? new Date(msg.created_at).toLocaleString('pt-BR')
-                              : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-900 font-medium">
-                            {msg.numero || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-700">
-                            {msg.pushname || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {msg.tipomessage || 'text'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">
-                            {msg.caption || msg.message || '-'}
-                          </td>
-                          <td className="px-4 py-3 text-xs font-mono text-slate-500 max-w-xs truncate">
-                            {msg.apikey_instancia}
-                          </td>
+                {messages.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-900/50 border-b border-cyan-500/20">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Data/Hora
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Número
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Nome
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Tipo
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            Mensagem
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                            API Key
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+                      </thead>
+                      <tbody className="divide-y divide-slate-700/50">
+                        {messages.map((msg) => (
+                          <tr key={msg.id} className="hover:bg-slate-700/30 transition-colors">
+                            <td className="px-6 py-4 text-sm text-slate-300 whitespace-nowrap">
+                              {msg.created_at
+                                ? new Date(msg.created_at).toLocaleString('pt-BR')
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-white font-medium">
+                              {msg.numero || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-300">
+                              {msg.pushname || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                {msg.tipomessage || 'text'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-300 max-w-xs truncate">
+                              {msg.caption || msg.message || '-'}
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-400 max-w-xs truncate">
+                              {msg.apikey_instancia}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );
