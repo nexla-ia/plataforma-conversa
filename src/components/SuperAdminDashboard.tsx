@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2 } from "lucide-react";
 
 type Company = {
@@ -28,6 +29,7 @@ type Message = {
 type TabType = "empresas" | "mensagens";
 
 export default function SuperAdminDashboard() {
+  const { signOut } = useAuth();
   const [userEmail, setUserEmail] = useState("");
   const [userId, setUserId] = useState("");
   const [activeTab, setActiveTab] = useState<TabType>("empresas");
@@ -49,7 +51,6 @@ export default function SuperAdminDashboard() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [showLogoutScreen, setShowLogoutScreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -331,13 +332,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    setShowLogoutScreen(true);
-    setTimeout(async () => {
-      await supabase.auth.signOut();
-      window.location.href = "/";
-    }, 5000);
-  };
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
     if (!confirm(`Tem certeza que deseja deletar a empresa "${companyName}"? Esta ação não pode ser desfeita.`)) {
@@ -579,17 +573,6 @@ export default function SuperAdminDashboard() {
   // =========================
   // UI
   // =========================
-  if (showLogoutScreen) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-teal-500 animate-spin mx-auto mb-6" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Saindo...</h2>
-          <p className="text-gray-600 font-medium">Até logo!</p>
-        </div>
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -663,7 +646,7 @@ export default function SuperAdminDashboard() {
               </div>
             )}
             <button
-              onClick={handleLogout}
+              onClick={signOut}
               className={`${
                 sidebarOpen ? "w-full" : ""
               } flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200 transition-all`}

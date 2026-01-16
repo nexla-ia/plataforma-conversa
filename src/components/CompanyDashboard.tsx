@@ -29,7 +29,6 @@ export default function CompanyDashboard() {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [imageModalSrc, setImageModalSrc] = useState('');
-  const [showLogoutScreen, setShowLogoutScreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -557,27 +556,6 @@ export default function CompanyDashboard() {
     setImageCaption('');
   };
 
-  const handleLogout = async () => {
-    setShowLogoutScreen(true);
-    setTimeout(async () => {
-      await signOut();
-      window.location.href = '/';
-    }, 5000);
-  };
-
-  if (showLogoutScreen) {
-    return (
-      <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-gray-100">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-16 h-16 text-teal-500 animate-spin mx-auto mb-6" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Saindo...</h2>
-            <p className="text-gray-600 font-medium">Até logo!</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (loading && !error) {
     return (
@@ -625,7 +603,7 @@ export default function CompanyDashboard() {
             </div>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={signOut}
             className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
             title="Sair"
           >
