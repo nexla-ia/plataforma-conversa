@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -9,7 +9,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +22,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
@@ -40,32 +39,12 @@ export default function Login() {
         return;
       }
 
-      if (data?.session) {
-        setShowLoadingScreen(true);
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 5000);
-      } else {
-        setErrorMsg("Não foi possível iniciar sessão. Tente novamente.");
-        setLoading(false);
-      }
+      // O AuthContext vai cuidar do loading de 5 segundos automaticamente
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Erro inesperado ao fazer login.");
       setLoading(false);
     }
   };
-
-  if (showLoadingScreen) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
-        <div className="text-center">
-          <Loader2 className="w-16 h-16 text-teal-500 animate-spin mx-auto mb-6" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Carregando...</h2>
-          <p className="text-gray-600">Redirecionando você para o dashboard</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 p-4 relative overflow-hidden">

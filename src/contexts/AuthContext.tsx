@@ -49,13 +49,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchCompany(session.user.id);
+    let mounted = true;
+
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchCompany(session.user.id);
+        }
+
+        // Aguardar 5 segundos antes de liberar o loading
+        setTimeout(() => {
+          if (mounted) {
+            setLoading(false);
+          }
+        }, 5000);
       }
-      setLoading(false);
-    });
+    };
+
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       (() => {
@@ -68,7 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
