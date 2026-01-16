@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw } from "lucide-react";
+import { Menu, X, Building2, Plus, LogOut } from "lucide-react";
 
 type Company = {
   id: string;
@@ -13,45 +13,17 @@ type Company = {
   created_at?: string;
 };
 
-type Message = {
-  id: string;
-  message: string | null;
-  numero: string | null;
-  pushname: string | null;
-  tipomessage: string | null;
-  created_at: string | null;
-  apikey_instancia: string;
-  company_id: string | null;
-  caption: string | null;
-};
-
-type TabType = "empresas" | "mensagens";
-
 export default function SuperAdminDashboard() {
   const [userEmail, setUserEmail] = useState("");
   const [userId, setUserId] = useState("");
-  const [activeTab, setActiveTab] = useState<TabType>("empresas");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
-
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [messageText, setMessageText] = useState("");
-  const [imageCaption, setImageCaption] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // form
   const [name, setName] = useState("");
@@ -114,46 +86,16 @@ export default function SuperAdminDashboard() {
       setUserEmail(session.user.email ?? "");
       setUserId(session.user.id);
 
-      await Promise.all([loadCompanies(), loadMessages()]);
+      await loadCompanies();
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    const messagesInterval = setInterval(() => {
-      loadMessages();
-    }, 1000);
-
     const companiesInterval = setInterval(() => {
       loadCompanies();
     }, 1000);
-
-    const messagesChannel = supabase
-      .channel('super-admin-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-        },
-        () => {
-          loadMessages();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sent_messages',
-        },
-        () => {
-          loadMessages();
-        }
-      )
-      .subscribe();
 
     const companiesChannel = supabase
       .channel('super-admin-companies')
@@ -171,29 +113,11 @@ export default function SuperAdminDashboard() {
       .subscribe();
 
     return () => {
-      clearInterval(messagesInterval);
       clearInterval(companiesInterval);
-      supabase.removeChannel(messagesChannel);
       supabase.removeChannel(companiesChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (selectedChat) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [selectedChat]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  }, [messages.length]);
 
   const loadCompanies = async () => {
     setErrorMsg(null);
@@ -210,38 +134,6 @@ export default function SuperAdminDashboard() {
     }
 
     setCompanies((data as Company[]) || []);
-  };
-
-  const loadMessages = async () => {
-    const [receivedResult, sentResult] = await Promise.all([
-      supabase
-        .from("messages")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("sent_messages")
-        .select("*")
-        .order("date_time", { ascending: false })
-        .limit(100)
-    ]);
-
-    if (receivedResult.error) {
-      console.error("Error loading messages:", receivedResult.error);
-      setMessages([]);
-      return;
-    }
-
-    if (sentResult.error) {
-      console.error("Error loading sent messages:", sentResult.error);
-    }
-
-    const allMessages = [
-      ...(receivedResult.data || []),
-      ...(sentResult.data || [])
-    ];
-
-    setMessages((allMessages as Message[]) || []);
   };
 
   // =========================
@@ -358,223 +250,6 @@ export default function SuperAdminDashboard() {
       setErrorMsg('Erro ao deletar empresa: ' + err.message);
     }
   };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const sendMessage = async (messageData: Partial<Message>, apiKey: string) => {
-    if (!selectedChat) return;
-
-    setSending(true);
-    try {
-      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      const { data: existingMessages } = await supabase
-        .from('messages')
-        .select('instancia, company_id')
-        .eq('numero', selectedChat)
-        .eq('apikey_instancia', apiKey)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const instanciaValue = existingMessages?.[0]?.instancia || 'Admin';
-      const companyId = existingMessages?.[0]?.company_id;
-
-      const newMessage = {
-        numero: selectedChat,
-        sender: selectedChat,
-        'minha?': 'true',
-        pushname: 'Admin',
-        apikey_instancia: apiKey,
-        date_time: new Date().toISOString(),
-        instancia: instanciaValue,
-        idmessage: generatedIdMessage,
-        company_id: companyId,
-        ...messageData,
-      };
-
-      const { error } = await supabase
-        .from('sent_messages')
-        .insert([newMessage]);
-
-      if (error) {
-        console.error('Erro ao enviar mensagem:', error);
-        alert('Erro ao enviar mensagem');
-        return;
-      }
-
-      try {
-        const timestamp = new Date().toISOString();
-
-        const webhookPayload = {
-          numero: selectedChat,
-          message: messageData.message || '',
-          tipomessage: messageData.tipomessage || 'conversation',
-          base64: messageData.base64 || null,
-          urlimagem: messageData.urlimagem || null,
-          urlpdf: messageData.urlpdf || null,
-          caption: messageData.caption || null,
-          idmessage: generatedIdMessage,
-          pushname: 'Admin',
-          timestamp: timestamp,
-          instancia: instanciaValue,
-          apikey_instancia: apiKey,
-        };
-
-        await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(webhookPayload),
-        });
-      } catch (webhookError) {
-        console.error('Erro ao chamar webhook:', webhookError);
-      }
-
-      setMessageText('');
-      await loadMessages();
-      setTimeout(scrollToBottom, 100);
-    } catch (err) {
-      console.error('Erro ao enviar mensagem:', err);
-      alert('Erro ao enviar mensagem');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        resolve(base64.split(',')[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleSendMessage = async () => {
-    if (sending || !selectedChat) return;
-    if (!messageText.trim() && !selectedFile) return;
-
-    const selectedChatData = filteredChats.find(c => c.numero === selectedChat);
-    if (!selectedChatData || selectedChatData.messages.length === 0) return;
-
-    const apiKey = selectedChatData.messages[0].apikey_instancia;
-
-    setSending(true);
-    try {
-      if (selectedFile) {
-        const base64 = await fileToBase64(selectedFile);
-        const isImage = selectedFile.type.startsWith('image/');
-
-        const messageData: Partial<Message> = {
-          tipomessage: isImage ? 'imageMessage' : 'documentMessage',
-          mimetype: selectedFile.type,
-          base64: base64,
-        };
-
-        if (isImage) {
-          messageData.message = imageCaption || messageText.trim() || 'Imagem';
-          if (imageCaption) {
-            messageData.caption = imageCaption;
-          }
-        } else {
-          messageData.message = messageText.trim() || selectedFile.name;
-        }
-
-        await sendMessage(messageData, apiKey);
-        setSelectedFile(null);
-        setFilePreview(null);
-        setImageCaption('');
-      } else {
-        await sendMessage({
-          message: messageText.trim(),
-          tipomessage: 'conversation',
-        }, apiKey);
-      }
-    } catch (err) {
-      console.error('Erro ao enviar:', err);
-      alert('Erro ao enviar mensagem');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setFilePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-    e.target.value = '';
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setFilePreview(null);
-    }
-    e.target.value = '';
-  };
-
-  const clearSelectedFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
-    setImageCaption('');
-  };
-
-  const groupMessagesByContact = () => {
-    const grouped: { [key: string]: Message[] } = {};
-
-    messages.forEach((msg) => {
-      const key = msg.numero || "unknown";
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(msg);
-    });
-
-    return Object.entries(grouped)
-      .map(([numero, msgs]) => {
-        const sortedMessages = msgs.sort((a, b) =>
-          new Date(a.created_at || a.date_time || 0).getTime() - new Date(b.created_at || b.date_time || 0).getTime()
-        );
-
-        const lastMsg = sortedMessages[sortedMessages.length - 1];
-
-        return {
-          numero,
-          pushname: lastMsg?.pushname || numero,
-          lastMessage: lastMsg?.caption || lastMsg?.message || "",
-          lastMessageTime: lastMsg?.created_at || lastMsg?.date_time || "",
-          messages: sortedMessages,
-          unreadCount: 0
-        };
-      })
-      .sort((a, b) => {
-        const timeA = new Date(a.lastMessageTime).getTime();
-        const timeB = new Date(b.lastMessageTime).getTime();
-        return timeB - timeA;
-      });
-  };
-
-  const filteredChats = groupMessagesByContact().filter(chat =>
-    chat.pushname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.numero.includes(searchQuery)
-  );
-
-  // =========================
-  // UI
-  // =========================
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
@@ -621,35 +296,13 @@ export default function SuperAdminDashboard() {
 
         <nav className="flex-1 p-4 space-y-2">
           <button
-            onClick={() => setActiveTab("empresas")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-              activeTab === "empresas"
-                ? "bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
-                : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
-            }`}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
           >
             <Building2 size={20} />
             {sidebarOpen && (
               <div className="flex-1 text-left">
                 <div className="font-medium">Empresas</div>
                 <div className="text-xs opacity-70">{companies.length} cadastradas</div>
-              </div>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("mensagens")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-              activeTab === "mensagens"
-                ? "bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
-                : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
-            }`}
-          >
-            <MessageSquare size={20} />
-            {sidebarOpen && (
-              <div className="flex-1 text-left">
-                <div className="font-medium">Mensagens</div>
-                <div className="text-xs opacity-70">{messages.length} recebidas</div>
               </div>
             )}
           </button>
@@ -871,266 +524,6 @@ export default function SuperAdminDashboard() {
                 ))}
               </div>
             </>
-          )}
-
-          {activeTab === "mensagens" && (
-            <div className="h-[calc(100vh-4rem)] flex gap-4">
-              <div className="w-80 bg-white/80 rounded-2xl border border-teal-200/50 backdrop-blur-sm flex flex-col overflow-hidden shadow-lg">
-                <div className="p-4 border-b border-teal-200/50">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">Mensagens</h3>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Pesquisar contato"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {filteredChats.length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
-                      Nenhuma conversa encontrada
-                    </div>
-                  )}
-
-                  {filteredChats.map((chat, index) => (
-                    <button
-                      key={chat.numero}
-                      onClick={() => setSelectedChat(chat.numero)}
-                      className={`w-full p-4 flex items-center gap-3 border-b border-gray-200 hover:bg-gray-50 transition-all ${
-                        selectedChat === chat.numero ? "bg-teal-50/50" : ""
-                      } animate-fadeIn`}
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-semibold flex-shrink-0 shadow-md">
-                        <User size={24} />
-                      </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-gray-900 truncate">{chat.pushname}</span>
-                          <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                            {chat.lastMessageTime
-                              ? new Date(chat.lastMessageTime).toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit"
-                                })
-                              : ""}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 truncate">{chat.lastMessage}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex-1 bg-white/80 rounded-2xl border border-teal-200/50 backdrop-blur-sm flex flex-col overflow-hidden shadow-lg">
-                {!selectedChat ? (
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                      <MessageSquare size={64} className="mx-auto mb-4 text-gray-300" />
-                      <p className="text-gray-500 text-lg">Selecione uma conversa para visualizar</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="p-4 border-b border-teal-200/50 flex items-center gap-3 bg-white/50 backdrop-blur-sm">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-semibold shadow-md">
-                        <User size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">
-                          {filteredChats.find((c) => c.numero === selectedChat)?.pushname}
-                        </h3>
-                        <p className="text-xs text-gray-600">{selectedChat}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-br from-gray-50 to-white">
-                      {filteredChats
-                        .find((c) => c.numero === selectedChat)
-                        ?.messages.map((msg, index) => {
-                          const isSentMessage = msg['minha?'] === 'true';
-                          const hasBase64 = msg.base64 && msg.base64.trim() !== '';
-                          const isImageMessage = msg.tipomessage?.toLowerCase().includes('image');
-
-                          return (
-                            <div
-                              key={msg.id}
-                              className={`flex animate-slideUp ${isSentMessage ? 'justify-end' : 'justify-start'}`}
-                              style={{ animationDelay: `${index * 0.05}s` }}
-                            >
-                              <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-lg ${
-                                isSentMessage
-                                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-br-md'
-                                  : 'bg-white/90 text-gray-900 rounded-bl-md border border-teal-200/50'
-                              }`}>
-                                {msg.urlimagem && !hasBase64 && (
-                                  <div className="mb-2">
-                                    <img
-                                      src={msg.urlimagem}
-                                      alt="Imagem"
-                                      className="rounded-xl max-w-full h-auto"
-                                      style={{ maxHeight: '300px' }}
-                                    />
-                                  </div>
-                                )}
-                                {hasBase64 && isImageMessage && (
-                                  <div className="mb-2">
-                                    <img
-                                      src={`data:image/jpeg;base64,${msg.base64}`}
-                                      alt="Imagem"
-                                      className="rounded-xl max-w-full h-auto"
-                                      style={{ maxHeight: '300px' }}
-                                    />
-                                  </div>
-                                )}
-                                {(msg.message || msg.caption) && (
-                                  <p className={`text-sm leading-relaxed break-words ${isSentMessage ? 'text-white' : 'text-gray-900'}`}>
-                                    {msg.caption || msg.message}
-                                  </p>
-                                )}
-                                <div className={`flex items-center gap-2 mt-2 text-xs ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
-                                  <span>
-                                    {msg.created_at || msg.date_time
-                                      ? new Date(msg.created_at || msg.date_time).toLocaleString("pt-BR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                          hour: "2-digit",
-                                          minute: "2-digit"
-                                        })
-                                      : ""}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    <div className="p-4 bg-white/50 backdrop-blur-sm border-t border-teal-200/50">
-                      {filePreview && (
-                        <div className="mb-3 px-4 py-3 bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 rounded-xl">
-                          <div className="flex items-start gap-3">
-                            <img src={filePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
-                            <div className="flex-1">
-                              <p className="text-xs text-teal-600 mb-1 font-medium">Imagem selecionada</p>
-                              <p className="text-xs text-gray-600">{selectedFile?.name}</p>
-                              <button
-                                onClick={clearSelectedFile}
-                                className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
-                              >
-                                Remover imagem
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedFile && selectedFile.type.startsWith('image/') && (
-                        <div className="mb-2">
-                          <input
-                            type="text"
-                            value={imageCaption}
-                            onChange={(e) => setImageCaption(e.target.value)}
-                            placeholder="Legenda para imagem (opcional)"
-                            className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition"
-                          />
-                        </div>
-                      )}
-
-                      {selectedFile && !selectedFile.type.startsWith('image/') && (
-                        <div className="mb-3 px-4 py-3 bg-gray-50/80 backdrop-blur-sm border border-gray-200/50 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <Paperclip className="w-8 h-8 text-gray-400" />
-                            <div className="flex-1">
-                              <p className="text-xs text-gray-600 mb-1 font-medium">Arquivo selecionado</p>
-                              <p className="text-xs text-gray-600">{selectedFile?.name}</p>
-                              <button
-                                onClick={clearSelectedFile}
-                                className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
-                              >
-                                Remover arquivo
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="file"
-                          ref={imageInputRef}
-                          accept="image/*"
-                          onChange={handleImageSelect}
-                          className="hidden"
-                        />
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          accept=".pdf,.doc,.docx,.txt"
-                          onChange={handleFileSelect}
-                          className="hidden"
-                        />
-
-                        <button
-                          onClick={() => imageInputRef.current?.click()}
-                          disabled={sending || !!selectedFile}
-                          className="p-2.5 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition disabled:opacity-50"
-                          title="Enviar imagem"
-                        >
-                          <ImageIcon className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={sending || !!selectedFile}
-                          className="p-2.5 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition disabled:opacity-50"
-                          title="Enviar arquivo"
-                        >
-                          <Paperclip className="w-5 h-5" />
-                        </button>
-
-                        <div className="flex-1 bg-white rounded-lg flex items-center px-4 py-2.5 border border-gray-300 focus-within:border-teal-500 transition">
-                          <input
-                            type="text"
-                            value={messageText}
-                            onChange={(e) => setMessageText(e.target.value)}
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage();
-                              }
-                            }}
-                            placeholder="Digite uma mensagem"
-                            disabled={sending}
-                            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
-                          />
-                        </div>
-
-                        <button
-                          onClick={handleSendMessage}
-                          disabled={(!messageText.trim() && !selectedFile) || sending}
-                          className="p-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-                          title="Enviar mensagem"
-                        >
-                          {sending ? (
-                            <RefreshCw className="w-5 h-5 text-white animate-spin" />
-                          ) : (
-                            <Send className="w-5 h-5 text-white" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
           )}
         </div>
       </main>
