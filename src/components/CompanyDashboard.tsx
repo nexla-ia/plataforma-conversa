@@ -205,6 +205,10 @@ export default function CompanyDashboard() {
 
     if (!company?.api_key) return;
 
+    const interval = setInterval(() => {
+      fetchMessages();
+    }, 1000);
+
     const channel = supabase
       .channel('messages-changes')
       .on(
@@ -234,6 +238,7 @@ export default function CompanyDashboard() {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, [company?.api_key, fetchMessages]);

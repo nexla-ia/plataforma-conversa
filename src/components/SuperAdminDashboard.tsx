@@ -119,9 +119,13 @@ export default function SuperAdminDashboard() {
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const messagesInterval = setInterval(() => {
       loadMessages();
-    }, 5000);
+    }, 1000);
+
+    const companiesInterval = setInterval(() => {
+      loadCompanies();
+    }, 1000);
 
     const messagesChannel = supabase
       .channel('super-admin-messages')
@@ -149,9 +153,26 @@ export default function SuperAdminDashboard() {
       )
       .subscribe();
 
+    const companiesChannel = supabase
+      .channel('super-admin-companies')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'companies',
+        },
+        () => {
+          loadCompanies();
+        }
+      )
+      .subscribe();
+
     return () => {
-      clearInterval(interval);
+      clearInterval(messagesInterval);
+      clearInterval(companiesInterval);
       supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(companiesChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
