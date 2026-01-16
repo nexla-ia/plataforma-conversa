@@ -118,6 +118,44 @@ export default function SuperAdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadMessages();
+    }, 5000);
+
+    const messagesChannel = supabase
+      .channel('super-admin-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          loadMessages();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sent_messages',
+        },
+        () => {
+          loadMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(messagesChannel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadCompanies = async () => {
     setErrorMsg(null);
 
@@ -136,19 +174,35 @@ export default function SuperAdminDashboard() {
   };
 
   const loadMessages = async () => {
-    const { data, error } = await supabase
-      .from("messages")
-      .select("id,message,numero,pushname,tipomessage,created_at,apikey_instancia,company_id,caption")
-      .order("created_at", { ascending: false })
-      .limit(100);
+    const [receivedResult, sentResult] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("sent_messages")
+        .select("*")
+        .order("date_time", { ascending: false })
+        .limit(100)
+    ]);
 
-    if (error) {
-      console.error("Error loading messages:", error);
+    if (receivedResult.error) {
+      console.error("Error loading messages:", receivedResult.error);
       setMessages([]);
       return;
     }
 
-    setMessages((data as Message[]) || []);
+    if (sentResult.error) {
+      console.error("Error loading sent messages:", sentResult.error);
+    }
+
+    const allMessages = [
+      ...(receivedResult.data || []),
+      ...(sentResult.data || [])
+    ];
+
+    setMessages((allMessages as Message[]) || []);
   };
 
   // =========================
@@ -196,7 +250,7 @@ export default function SuperAdminDashboard() {
       console.log("SESSION:", session);
       console.log("ACCESS_TOKEN:", session?.access_token?.slice(0, 30));
 
-      const { data, error } = await supabase.functions.invoke("create-company", {
+      const response = await supabase.functions.invoke("create-company", {
         body: {
           email: email.trim().toLowerCase(),
           password,
@@ -209,12 +263,15 @@ export default function SuperAdminDashboard() {
         },
       });
 
-      if (error) {
-        console.error("Erro create-company:", error);
-        throw new Error(error.message || "Erro ao criar empresa.");
+      console.log("Response completo:", response);
+
+      if (response.error) {
+        console.error("Erro create-company:", response.error);
+        const errorDetails = response.data?.error || response.data?.details || response.error.message;
+        throw new Error(errorDetails || "Erro ao criar empresa.");
       }
 
-      console.log("Empresa criada:", data);
+      console.log("Empresa criada:", response.data);
 
       // limpa e fecha
       setShowForm(false);
@@ -237,6 +294,30 @@ export default function SuperAdminDashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
+  };
+
+  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    if (!confirm(`Tem certeza que deseja deletar a empresa "${companyName}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', companyId);
+
+      if (error) {
+        console.error('Erro ao deletar empresa:', error);
+        setErrorMsg('Erro ao deletar empresa: ' + error.message);
+        return;
+      }
+
+      await loadCompanies();
+    } catch (err: any) {
+      console.error('Erro ao deletar empresa:', err);
+      setErrorMsg('Erro ao deletar empresa: ' + err.message);
+    }
   };
 
   const scrollToBottom = () => {
@@ -418,19 +499,27 @@ export default function SuperAdminDashboard() {
     });
 
     return Object.entries(grouped)
-      .map(([numero, msgs]) => ({
-        numero,
-        pushname: msgs[0]?.pushname || numero,
-        lastMessage: msgs[0]?.caption || msgs[0]?.message || "",
-        lastMessageTime: msgs[0]?.created_at || "",
-        messages: msgs.sort((a, b) =>
-          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
-        ),
-        unreadCount: 0
-      }))
-      .sort((a, b) =>
-        new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
-      );
+      .map(([numero, msgs]) => {
+        const sortedMessages = msgs.sort((a, b) =>
+          new Date(a.created_at || a.date_time || 0).getTime() - new Date(b.created_at || b.date_time || 0).getTime()
+        );
+
+        const lastMsg = sortedMessages[sortedMessages.length - 1];
+
+        return {
+          numero,
+          pushname: lastMsg?.pushname || numero,
+          lastMessage: lastMsg?.caption || lastMsg?.message || "",
+          lastMessageTime: lastMsg?.created_at || lastMsg?.date_time || "",
+          messages: sortedMessages,
+          unreadCount: 0
+        };
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.lastMessageTime).getTime();
+        const timeB = new Date(b.lastMessageTime).getTime();
+        return timeB - timeA;
+      });
   };
 
   const filteredChats = groupMessagesByContact().filter(chat =>
@@ -676,87 +765,65 @@ export default function SuperAdminDashboard() {
                 </div>
               )}
 
-              <div className="bg-slate-800/50 rounded-2xl border border-cyan-500/20 overflow-hidden backdrop-blur-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {companies.length === 0 && (
-                  <div className="text-center py-16 text-slate-400">
+                  <div className="col-span-full text-center py-16 text-slate-400">
                     Nenhuma empresa cadastrada.
                   </div>
                 )}
 
-                {companies.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-slate-900/50 border-b border-cyan-500/20">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Nome
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Telefone
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            API Key
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Email
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            User ID
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Super Admin
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-700/50">
-                        {companies.map((c, index) => (
-                          <tr
-                            key={c.id}
-                            className="hover:bg-slate-700/30 transition-colors animate-fadeIn"
-                            style={{ animationDelay: `${index * 0.05}s` }}
+                {companies.map((c, index) => (
+                  <div
+                    key={c.id}
+                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm hover:scale-105 animate-fadeIn"
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="text-xl font-semibold text-white">{c.name}</div>
+                      <div className="flex items-center gap-2">
+                        {c.is_super_admin && (
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 font-medium">
+                            Admin
+                          </span>
+                        )}
+                        {!c.is_super_admin && (
+                          <button
+                            onClick={() => handleDeleteCompany(c.id, c.name)}
+                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Deletar empresa"
                           >
-                            <td className="px-6 py-4 text-sm text-white font-medium">
-                              {c.name}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-300">
-                              {c.phone_number}
-                            </td>
-                            <td className="px-6 py-4 text-xs font-mono text-slate-400">
-                              <div className="max-w-xs truncate bg-slate-900/50 px-2 py-1 rounded">
-                                {c.api_key}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-300">
-                              <div className="max-w-xs truncate">
-                                {c.email}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-xs font-mono text-slate-400">
-                              {c.user_id ? (
-                                <div className="max-w-xs truncate">
-                                  {c.user_id}
-                                </div>
-                              ) : (
-                                <span className="text-slate-500">null</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              {c.is_super_admin ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30">
-                                  true
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400 border border-slate-600/30">
-                                  false
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-center gap-3 text-slate-300">
+                        <span className="text-cyan-400">📞</span>
+                        <span>{c.phone_number}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-slate-300">
+                        <span className="text-cyan-400">✉️</span>
+                        <span className="break-all">{c.email}</span>
+                      </div>
+                      <div className="flex items-start gap-3 mt-4 pt-4 border-t border-slate-700/50">
+                        <span className="text-cyan-400">🔑</span>
+                        <span className="break-all text-xs font-mono text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
+                          {c.api_key}
+                        </span>
+                      </div>
+                      {c.user_id && (
+                        <div className="flex items-start gap-3 pt-2 border-t border-slate-700/50">
+                          <span className="text-cyan-400">👤</span>
+                          <span className="break-all text-xs font-mono text-slate-400">
+                            {c.user_id}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </>
           )}
