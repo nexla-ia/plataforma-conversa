@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase"; // ✅ ajuste o caminho se necessário
+import { supabase } from "../lib/supabase";
 
 type Company = {
+  id: string;
   api_key: string;
   name: string;
   phone_number: string;
@@ -11,11 +12,27 @@ type Company = {
   created_at?: string;
 };
 
+type Message = {
+  id: string;
+  message: string | null;
+  numero: string | null;
+  pushname: string | null;
+  tipomessage: string | null;
+  created_at: string | null;
+  apikey_instancia: string;
+  company_id: string | null;
+  caption: string | null;
+};
+
+type TabType = "empresas" | "mensagens";
+
 export default function SuperAdminDashboard() {
   const [userEmail, setUserEmail] = useState("");
   const [userId, setUserId] = useState("");
+  const [activeTab, setActiveTab] = useState<TabType>("empresas");
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -56,7 +73,7 @@ export default function SuperAdminDashboard() {
   };
 
   // =========================
-  // Load user + companies
+  // Load user + companies + messages
   // =========================
   useEffect(() => {
     (async () => {
@@ -83,24 +100,19 @@ export default function SuperAdminDashboard() {
       setUserEmail(session.user.email ?? "");
       setUserId(session.user.id);
 
-      await loadCompanies(session.user.id);
+      await Promise.all([loadCompanies(), loadMessages()]);
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadCompanies = async (uid?: string) => {
+  const loadCompanies = async () => {
     setErrorMsg(null);
 
-    const query = supabase
+    const { data, error } = await supabase
       .from("companies")
-      .select("api_key,name,phone_number,email,user_id,is_super_admin,created_at")
+      .select("id,api_key,name,phone_number,email,user_id,is_super_admin,created_at")
       .order("created_at", { ascending: false });
-
-    // Se você quiser listar só as empresas do usuário logado:
-    if (uid) query.eq("user_id", uid);
-
-    const { data, error } = await query;
 
     if (error) {
       setErrorMsg(error.message);
@@ -109,6 +121,22 @@ export default function SuperAdminDashboard() {
     }
 
     setCompanies((data as Company[]) || []);
+  };
+
+  const loadMessages = async () => {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("id,message,numero,pushname,tipomessage,created_at,apikey_instancia,company_id,caption")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error("Error loading messages:", error);
+      setMessages([]);
+      return;
+    }
+
+    setMessages((data as Message[]) || []);
   };
 
   // =========================
@@ -185,9 +213,7 @@ export default function SuperAdminDashboard() {
       setPassword("");
 
       // recarrega lista
-      setLoading(true);
-      await loadCompanies(session.user.id);
-      setLoading(false);
+      await loadCompanies();
     } catch (err: any) {
       console.error("handleCreateCompany:", err);
       setErrorMsg(err?.message ?? "Erro inesperado.");
@@ -214,42 +240,69 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
-        <div>
-          <div className="text-lg font-semibold text-slate-900">Super Admin</div>
-          <div className="text-sm text-slate-500">Gerenciamento de Empresas</div>
-          <div className="text-xs text-slate-400 mt-1">
-            {userEmail} • {userId}
+      <header className="bg-white border-b border-slate-200">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div>
+            <div className="text-lg font-semibold text-slate-900">Super Admin</div>
+            <div className="text-sm text-slate-500">Painel de Gerenciamento</div>
+            <div className="text-xs text-slate-400 mt-1">
+              {userEmail}
+            </div>
           </div>
-        </div>
-
-        <button
-          onClick={handleLogout}
-          className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100"
-        >
-          Sair
-        </button>
-      </header>
-
-      <main className="px-6 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-slate-900">Empresas Cadastradas</h2>
 
           <button
-            onClick={() => setShowForm(true)}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700"
+            onClick={handleLogout}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors"
           >
-            + Nova Empresa
+            Sair
           </button>
         </div>
 
+        <div className="flex gap-1 px-6">
+          <button
+            onClick={() => setActiveTab("empresas")}
+            className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === "empresas"
+                ? "border-emerald-600 text-emerald-600"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Empresas ({companies.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("mensagens")}
+            className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === "mensagens"
+                ? "border-emerald-600 text-emerald-600"
+                : "border-transparent text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Mensagens ({messages.length})
+          </button>
+        </div>
+      </header>
+
+      <main className="px-6 py-6">
         {errorMsg && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMsg}
           </div>
         )}
 
-        {showForm && (
+        {activeTab === "empresas" && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Empresas Cadastradas</h2>
+
+              <button
+                onClick={() => setShowForm(true)}
+                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-white font-medium hover:bg-emerald-700 transition-colors"
+              >
+                + Nova Empresa
+              </button>
+            </div>
+
+            {showForm && (
           <div className="mb-6 rounded-xl bg-white border border-slate-200 p-4">
             <h3 className="text-lg font-semibold text-slate-900 mb-3">
               Cadastrar Nova Empresa
@@ -358,33 +411,120 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {companies.length === 0 && (
-            <div className="text-slate-500">Nenhuma empresa cadastrada.</div>
-          )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {companies.length === 0 && (
+                <div className="col-span-full text-center py-12 text-slate-500">
+                  Nenhuma empresa cadastrada.
+                </div>
+              )}
 
-          {companies.map((c) => (
-            <div
-              key={c.api_key} // ✅ key única
-              className="rounded-xl bg-white border border-slate-200 p-4"
-            >
-              <div className="flex items-start justify-between">
-                <div className="text-lg font-semibold text-slate-900">{c.name}</div>
-                {c.is_super_admin ? (
-                  <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">
-                    Admin
-                  </span>
-                ) : null}
-              </div>
+              {companies.map((c) => (
+                <div
+                  key={c.id}
+                  className="rounded-xl bg-white border border-slate-200 p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="text-lg font-semibold text-slate-900">{c.name}</div>
+                    {c.is_super_admin && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
+                        Admin
+                      </span>
+                    )}
+                  </div>
 
-              <div className="mt-3 text-sm text-slate-600 space-y-1">
-                <div>📞 {c.phone_number}</div>
-                <div>✉️ {c.email}</div>
-                <div className="break-all">🔑 {c.api_key}</div>
-              </div>
+                  <div className="space-y-2 text-sm text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">📞</span>
+                      <span>{c.phone_number}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">✉️</span>
+                      <span className="break-all">{c.email}</span>
+                    </div>
+                    <div className="flex items-start gap-2 mt-3 pt-3 border-t border-slate-100">
+                      <span className="text-slate-400">🔑</span>
+                      <span className="break-all text-xs font-mono text-slate-500">{c.api_key}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
+
+        {activeTab === "mensagens" && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Mensagens Recebidas</h2>
+              <p className="text-sm text-slate-600">Últimas 100 mensagens do sistema</p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              {messages.length === 0 && (
+                <div className="text-center py-12 text-slate-500">
+                  Nenhuma mensagem encontrada.
+                </div>
+              )}
+
+              {messages.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Data/Hora
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Número
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Nome
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Tipo
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          Mensagem
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                          API Key
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {messages.map((msg) => (
+                        <tr key={msg.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            {msg.created_at
+                              ? new Date(msg.created_at).toLocaleString('pt-BR')
+                              : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-900 font-medium">
+                            {msg.numero || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {msg.pushname || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {msg.tipomessage || 'text'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">
+                            {msg.caption || msg.message || '-'}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-mono text-slate-500 max-w-xs truncate">
+                            {msg.apikey_instancia}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
