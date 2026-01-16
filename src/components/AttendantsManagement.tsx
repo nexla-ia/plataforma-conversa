@@ -192,6 +192,29 @@ export default function AttendantsManagement() {
     setEditingId(null);
   };
 
+  const formatPhoneNumber = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+
+    if (numbers.length <= 10) {
+      return numbers.replace(/(\d{2})(\d{4})(\d{0,4})/, (_, ddd, p1, p2) => {
+        if (p2) return `(${ddd}) ${p1}-${p2}`;
+        if (p1) return `(${ddd}) ${p1}`;
+        return `(${ddd}`;
+      });
+    } else {
+      return numbers.replace(/(\d{2})(\d{5})(\d{0,4})/, (_, ddd, p1, p2) => {
+        if (p2) return `(${ddd}) ${p1}-${p2}`;
+        if (p1) return `(${ddd}) ${p1}`;
+        return `(${ddd}`;
+      });
+    }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const formatted = formatPhoneNumber(value);
+    setFormData({ ...formData, phone: formatted });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -270,8 +293,9 @@ export default function AttendantsManagement() {
               <input
                 type="text"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) => handlePhoneChange(e.target.value)}
                 placeholder="(00) 00000-0000"
+                maxLength={15}
                 className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
               />
             </div>
