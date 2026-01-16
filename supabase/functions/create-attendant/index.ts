@@ -126,6 +126,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const { data: companyData } = await supabaseAdmin
+      .from("companies")
+      .select("api_key")
+      .eq("id", company_id)
+      .single();
+
     const { data: attendant, error: insertError } = await supabaseAdmin
       .from("attendants")
       .insert({
@@ -137,6 +143,7 @@ Deno.serve(async (req: Request) => {
         email: email.trim(),
         phone: phone || "",
         is_active: is_active !== undefined ? is_active : true,
+        api_key: companyData?.api_key || null,
       })
       .select()
       .single();
