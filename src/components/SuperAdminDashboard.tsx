@@ -553,35 +553,35 @@ export default function SuperAdminDashboard() {
   // =========================
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="text-center">
-          <div className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
+          <div className="text-4xl font-bold bg-gradient-to-r from-teal-500 to-teal-600 bg-clip-text text-transparent mb-4">
             NEXLA
           </div>
-          <div className="text-slate-400 animate-pulse">Carregando...</div>
+          <div className="text-gray-600 animate-pulse">Carregando...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex">
       <aside
         className={`${
           sidebarOpen ? "w-64" : "w-20"
-        } bg-slate-950 border-r border-cyan-500/20 transition-all duration-300 flex flex-col relative`}
+        } bg-white/80 backdrop-blur-xl border-r border-gray-200/50 transition-all duration-300 flex flex-col relative shadow-lg`}
       >
-        <div className="p-6 border-b border-cyan-500/20">
+        <div className="p-6 border-b border-gray-200/50">
           <div className="flex items-center justify-between">
             {sidebarOpen ? (
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-500 to-teal-600 bg-clip-text text-transparent">
                   NEXLA
                 </h1>
-                <p className="text-xs text-slate-400 mt-1">Admin Portal</p>
+                <p className="text-xs text-gray-500 mt-1">Admin Portal</p>
               </div>
             ) : (
-              <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+              <div className="text-2xl font-bold bg-gradient-to-r from-teal-500 to-teal-600 bg-clip-text text-transparent">
                 N
               </div>
             )}
@@ -590,7 +590,7 @@ export default function SuperAdminDashboard() {
 
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute -right-3 top-20 bg-slate-950 border border-cyan-500/40 rounded-full p-1.5 text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+          className="absolute -right-3 top-20 bg-white border border-teal-400/40 rounded-full p-1.5 text-teal-500 hover:bg-teal-50 transition-colors shadow-md"
         >
           {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
         </button>
@@ -600,8 +600,8 @@ export default function SuperAdminDashboard() {
             onClick={() => setActiveTab("empresas")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
               activeTab === "empresas"
-                ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30"
-                : "text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50"
+                ? "bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
+                : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
             }`}
           >
             <Building2 size={20} />
@@ -617,8 +617,8 @@ export default function SuperAdminDashboard() {
             onClick={() => setActiveTab("mensagens")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
               activeTab === "mensagens"
-                ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30"
-                : "text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50"
+                ? "bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
+                : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
             }`}
           >
             <MessageSquare size={20} />
@@ -631,19 +631,19 @@ export default function SuperAdminDashboard() {
           </button>
         </nav>
 
-        <div className="p-4 border-t border-cyan-500/20">
+        <div className="p-4 border-t border-gray-200/50">
           <div className={`${sidebarOpen ? "" : "flex justify-center"}`}>
             {sidebarOpen && (
               <div className="mb-3">
-                <div className="text-xs text-slate-400 mb-1">Logado como</div>
-                <div className="text-sm text-slate-300 truncate">{userEmail}</div>
+                <div className="text-xs text-gray-500 mb-1">Logado como</div>
+                <div className="text-sm text-gray-700 truncate">{userEmail}</div>
               </div>
             )}
             <button
               onClick={handleLogout}
               className={`${
                 sidebarOpen ? "w-full" : ""
-              } flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 transition-all`}
+              } flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:text-red-500 hover:bg-red-50 border border-gray-200 hover:border-red-200 transition-all`}
             >
               <LogOut size={18} />
               {sidebarOpen && <span>Sair</span>}
@@ -655,7 +655,7 @@ export default function SuperAdminDashboard() {
       <main className="flex-1 overflow-auto">
         <div className="p-8">
           {errorMsg && (
-            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400 backdrop-blur-sm">
+            <div className="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 backdrop-blur-sm">
               {errorMsg}
             </div>
           )}
@@ -664,13 +664,13 @@ export default function SuperAdminDashboard() {
             <>
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-2">Empresas Cadastradas</h2>
-                  <p className="text-slate-400">Gerencie todas as empresas do sistema</p>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Empresas Cadastradas</h2>
+                  <p className="text-gray-600">Gerencie todas as empresas do sistema</p>
                 </div>
 
                 <button
                   onClick={() => setShowForm(true)}
-                  className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium hover:from-cyan-600 hover:to-blue-700 transition-all shadow-lg shadow-cyan-500/20"
+                  className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 text-white font-medium hover:from-teal-600 hover:to-teal-700 transition-all shadow-lg"
                 >
                   <Plus size={20} />
                   Nova Empresa
@@ -678,20 +678,20 @@ export default function SuperAdminDashboard() {
               </div>
 
               {showForm && (
-                <div className="mb-8 rounded-2xl bg-slate-800/50 border border-cyan-500/20 p-6 backdrop-blur-sm">
-                  <h3 className="text-xl font-semibold text-white mb-6">
+                <div className="mb-8 rounded-2xl bg-white/80 border border-teal-200/50 p-6 backdrop-blur-sm shadow-lg">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-6">
                     Cadastrar Nova Empresa
                   </h3>
 
                   <form onSubmit={handleCreateCompany} className="grid gap-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm text-slate-300 mb-2">
+                        <label className="block text-sm text-gray-700 mb-2">
                           Nome da Empresa
                         </label>
                         <input
                           required
-                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           placeholder="Ex: Minha Empresa"
@@ -699,13 +699,13 @@ export default function SuperAdminDashboard() {
                       </div>
 
                       <div>
-                        <label className="block text-sm text-slate-300 mb-2">
+                        <label className="block text-sm text-gray-700 mb-2">
                           Número de Telefone
                         </label>
                         <input
                           required
                           type="tel"
-                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                           value={phone_number}
                           onChange={handlePhoneChange}
                           placeholder="(69) 99999-9999"
@@ -714,13 +714,13 @@ export default function SuperAdminDashboard() {
                       </div>
 
                       <div>
-                        <label className="block text-sm text-slate-300 mb-2">
+                        <label className="block text-sm text-gray-700 mb-2">
                           Chave API
                         </label>
                         <div className="flex gap-2">
                           <input
                             required
-                            className="flex-1 rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 font-mono text-sm"
+                            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 font-mono text-sm"
                             value={api_key}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder="UUID/chave"
@@ -728,7 +728,7 @@ export default function SuperAdminDashboard() {
                           <button
                             type="button"
                             onClick={generateApiKey}
-                            className="rounded-lg bg-slate-700 px-4 py-2 text-slate-300 text-sm hover:bg-slate-600 border border-slate-600 transition-colors"
+                            className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 text-sm hover:bg-gray-200 border border-gray-300 transition-colors"
                           >
                             Gerar
                           </button>
@@ -736,13 +736,13 @@ export default function SuperAdminDashboard() {
                       </div>
 
                       <div>
-                        <label className="block text-sm text-slate-300 mb-2">
+                        <label className="block text-sm text-gray-700 mb-2">
                           Email
                         </label>
                         <input
                           required
                           type="email"
-                          className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="empresa@dominio.com"
@@ -751,13 +751,13 @@ export default function SuperAdminDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-sm text-slate-300 mb-2">
-                        Senha <span className="text-slate-500 text-xs">(mínimo 6 caracteres)</span>
+                      <label className="block text-sm text-gray-700 mb-2">
+                        Senha <span className="text-gray-500 text-xs">(mínimo 6 caracteres)</span>
                       </label>
                       <input
                         required
                         type="password"
-                        className="w-full rounded-lg border border-slate-600 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="********"
@@ -769,7 +769,7 @@ export default function SuperAdminDashboard() {
                       <button
                         type="submit"
                         disabled={creating}
-                        className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-2.5 text-white font-medium hover:from-cyan-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-500/20"
+                        className="rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 px-6 py-2.5 text-white font-medium hover:from-teal-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                       >
                         {creating ? "Cadastrando..." : "Cadastrar Empresa"}
                       </button>
@@ -777,7 +777,7 @@ export default function SuperAdminDashboard() {
                       <button
                         type="button"
                         onClick={() => setShowForm(false)}
-                        className="rounded-lg border border-slate-600 px-6 py-2.5 text-slate-300 hover:bg-slate-800 transition-colors"
+                        className="rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         Cancelar
                       </button>
@@ -788,7 +788,7 @@ export default function SuperAdminDashboard() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {companies.length === 0 && (
-                  <div className="col-span-full text-center py-16 text-slate-400">
+                  <div className="col-span-full text-center py-16 text-gray-500">
                     Nenhuma empresa cadastrada.
                   </div>
                 )}
@@ -796,21 +796,21 @@ export default function SuperAdminDashboard() {
                 {companies.map((c, index) => (
                   <div
                     key={c.id}
-                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm hover:scale-105 animate-fadeIn"
+                    className="group rounded-xl bg-white/80 border border-teal-200/50 p-6 hover:border-teal-300 hover:shadow-lg transition-all backdrop-blur-sm hover:scale-105 animate-fadeIn"
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     <div className="flex items-start justify-between mb-4">
-                      <div className="text-xl font-semibold text-white">{c.name}</div>
+                      <div className="text-xl font-semibold text-gray-900">{c.name}</div>
                       <div className="flex items-center gap-2">
                         {c.is_super_admin && (
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 font-medium">
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-300 font-medium">
                             Admin
                           </span>
                         )}
                         {!c.is_super_admin && (
                           <button
                             onClick={() => handleDeleteCompany(c.id, c.name)}
-                            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                            className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Deletar empresa"
                           >
                             <X size={18} />
@@ -820,24 +820,24 @@ export default function SuperAdminDashboard() {
                     </div>
 
                     <div className="space-y-3 text-sm">
-                      <div className="flex items-center gap-3 text-slate-300">
-                        <span className="text-cyan-400">📞</span>
+                      <div className="flex items-center gap-3 text-gray-700">
+                        <span className="text-teal-600">📞</span>
                         <span>{c.phone_number}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-slate-300">
-                        <span className="text-cyan-400">✉️</span>
+                      <div className="flex items-center gap-3 text-gray-700">
+                        <span className="text-teal-600">✉️</span>
                         <span className="break-all">{c.email}</span>
                       </div>
-                      <div className="flex items-start gap-3 mt-4 pt-4 border-t border-slate-700/50">
-                        <span className="text-cyan-400">🔑</span>
-                        <span className="break-all text-xs font-mono text-slate-400 bg-slate-900/50 px-2 py-1 rounded">
+                      <div className="flex items-start gap-3 mt-4 pt-4 border-t border-gray-200">
+                        <span className="text-teal-600">🔑</span>
+                        <span className="break-all text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded">
                           {c.api_key}
                         </span>
                       </div>
                       {c.user_id && (
-                        <div className="flex items-start gap-3 pt-2 border-t border-slate-700/50">
-                          <span className="text-cyan-400">👤</span>
-                          <span className="break-all text-xs font-mono text-slate-400">
+                        <div className="flex items-start gap-3 pt-2 border-t border-gray-200">
+                          <span className="text-teal-600">👤</span>
+                          <span className="break-all text-xs font-mono text-gray-600">
                             {c.user_id}
                           </span>
                         </div>
@@ -851,24 +851,24 @@ export default function SuperAdminDashboard() {
 
           {activeTab === "mensagens" && (
             <div className="h-[calc(100vh-4rem)] flex gap-4">
-              <div className="w-80 bg-slate-800/50 rounded-2xl border border-cyan-500/20 backdrop-blur-sm flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-cyan-500/20">
-                  <h3 className="text-xl font-bold text-white mb-4">Mensagens</h3>
+              <div className="w-80 bg-white/80 rounded-2xl border border-teal-200/50 backdrop-blur-sm flex flex-col overflow-hidden shadow-lg">
+                <div className="p-4 border-b border-teal-200/50">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">Mensagens</h3>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                       type="text"
                       placeholder="Pesquisar contato"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all"
                     />
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
                   {filteredChats.length === 0 && (
-                    <div className="text-center py-12 text-slate-400">
+                    <div className="text-center py-12 text-gray-500">
                       Nenhuma conversa encontrada
                     </div>
                   )}
@@ -877,18 +877,18 @@ export default function SuperAdminDashboard() {
                     <button
                       key={chat.numero}
                       onClick={() => setSelectedChat(chat.numero)}
-                      className={`w-full p-4 flex items-center gap-3 border-b border-slate-700/50 hover:bg-slate-700/30 transition-all ${
-                        selectedChat === chat.numero ? "bg-slate-700/50" : ""
+                      className={`w-full p-4 flex items-center gap-3 border-b border-gray-200 hover:bg-gray-50 transition-all ${
+                        selectedChat === chat.numero ? "bg-teal-50/50" : ""
                       } animate-fadeIn`}
                       style={{ animationDelay: `${index * 0.05}s` }}
                     >
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-semibold flex-shrink-0 shadow-md">
                         <User size={24} />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-white truncate">{chat.pushname}</span>
-                          <span className="text-xs text-slate-400 flex-shrink-0 ml-2">
+                          <span className="font-semibold text-gray-900 truncate">{chat.pushname}</span>
+                          <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                             {chat.lastMessageTime
                               ? new Date(chat.lastMessageTime).toLocaleTimeString("pt-BR", {
                                   hour: "2-digit",
@@ -897,36 +897,36 @@ export default function SuperAdminDashboard() {
                               : ""}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-400 truncate">{chat.lastMessage}</p>
+                        <p className="text-sm text-gray-600 truncate">{chat.lastMessage}</p>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="flex-1 bg-slate-800/50 rounded-2xl border border-cyan-500/20 backdrop-blur-sm flex flex-col overflow-hidden">
+              <div className="flex-1 bg-white/80 rounded-2xl border border-teal-200/50 backdrop-blur-sm flex flex-col overflow-hidden shadow-lg">
                 {!selectedChat ? (
                   <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                      <MessageSquare size={64} className="mx-auto mb-4 text-slate-600" />
-                      <p className="text-slate-400 text-lg">Selecione uma conversa para visualizar</p>
+                      <MessageSquare size={64} className="mx-auto mb-4 text-gray-300" />
+                      <p className="text-gray-500 text-lg">Selecione uma conversa para visualizar</p>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="p-4 border-b border-cyan-500/20 flex items-center gap-3 bg-slate-900/50">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold">
+                    <div className="p-4 border-b border-teal-200/50 flex items-center gap-3 bg-white/50 backdrop-blur-sm">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-semibold shadow-md">
                         <User size={20} />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-white">
+                        <h3 className="font-semibold text-gray-900">
                           {filteredChats.find((c) => c.numero === selectedChat)?.pushname}
                         </h3>
-                        <p className="text-xs text-slate-400">{selectedChat}</p>
+                        <p className="text-xs text-gray-600">{selectedChat}</p>
                       </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-br from-slate-900/30 to-slate-800/30">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-br from-gray-50 to-white">
                       {filteredChats
                         .find((c) => c.numero === selectedChat)
                         ?.messages.map((msg, index) => {
@@ -937,10 +937,10 @@ export default function SuperAdminDashboard() {
                               className={`flex animate-slideUp ${isSentMessage ? 'justify-end' : 'justify-start'}`}
                               style={{ animationDelay: `${index * 0.05}s` }}
                             >
-                              <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-lg backdrop-blur-sm ${
+                              <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-lg ${
                                 isSentMessage
-                                  ? 'bg-cyan-600/80 rounded-br-sm border border-cyan-500/30'
-                                  : 'bg-slate-700/50 rounded-tl-sm border border-cyan-500/20'
+                                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-br-md'
+                                  : 'bg-white/90 text-gray-900 rounded-bl-md border border-teal-200/50'
                               }`}>
                                 {msg.urlimagem && (
                                   <div className="mb-2">
@@ -953,11 +953,11 @@ export default function SuperAdminDashboard() {
                                   </div>
                                 )}
                                 {(msg.message || msg.caption) && (
-                                  <p className="text-white text-sm leading-relaxed break-words">
+                                  <p className={`text-sm leading-relaxed break-words ${isSentMessage ? 'text-white' : 'text-gray-900'}`}>
                                     {msg.caption || msg.message}
                                   </p>
                                 )}
-                                <div className="flex items-center gap-2 mt-2 text-xs text-slate-300">
+                                <div className={`flex items-center gap-2 mt-2 text-xs ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
                                   <span>
                                     {msg.created_at || msg.date_time
                                       ? new Date(msg.created_at || msg.date_time).toLocaleString("pt-BR", {
@@ -977,14 +977,14 @@ export default function SuperAdminDashboard() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="p-4 bg-slate-900/50 border-t border-cyan-500/20">
+                    <div className="p-4 bg-white/50 backdrop-blur-sm border-t border-teal-200/50">
                       {imageCaption && (
-                        <div className="mb-2 px-3 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg">
-                          <p className="text-xs text-cyan-300 mb-1">Legenda da imagem:</p>
-                          <p className="text-sm text-white">{imageCaption}</p>
+                        <div className="mb-2 px-3 py-2 bg-teal-50 border border-teal-200 rounded-lg">
+                          <p className="text-xs text-teal-600 mb-1 font-medium">Legenda da imagem:</p>
+                          <p className="text-sm text-gray-900">{imageCaption}</p>
                           <button
                             onClick={() => setImageCaption('')}
-                            className="text-xs text-red-400 hover:text-red-300 mt-1"
+                            className="text-xs text-red-500 hover:text-red-600 mt-1 font-medium"
                           >
                             Remover legenda
                           </button>
@@ -996,7 +996,7 @@ export default function SuperAdminDashboard() {
                           value={imageCaption}
                           onChange={(e) => setImageCaption(e.target.value)}
                           placeholder="Legenda para imagem (opcional)"
-                          className="w-full px-3 py-2 text-sm bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition"
+                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -1018,7 +1018,7 @@ export default function SuperAdminDashboard() {
                         <button
                           onClick={() => imageInputRef.current?.click()}
                           disabled={uploadingFile || sending}
-                          className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50"
+                          className="p-2.5 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition disabled:opacity-50"
                           title="Enviar imagem"
                         >
                           <ImageIcon className="w-5 h-5" />
@@ -1026,13 +1026,13 @@ export default function SuperAdminDashboard() {
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           disabled={uploadingFile || sending}
-                          className="p-2.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50"
+                          className="p-2.5 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition disabled:opacity-50"
                           title="Enviar arquivo"
                         >
                           <Paperclip className="w-5 h-5" />
                         </button>
 
-                        <div className="flex-1 bg-slate-800/50 rounded-lg flex items-center px-4 py-2.5 border border-slate-600 focus-within:border-cyan-500 transition">
+                        <div className="flex-1 bg-white rounded-lg flex items-center px-4 py-2.5 border border-gray-300 focus-within:border-teal-500 transition">
                           <input
                             type="text"
                             value={messageText}
@@ -1045,14 +1045,14 @@ export default function SuperAdminDashboard() {
                             }}
                             placeholder="Digite uma mensagem"
                             disabled={sending || uploadingFile}
-                            className="flex-1 bg-transparent text-white placeholder-slate-400 focus:outline-none disabled:opacity-50 text-sm"
+                            className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                           />
                         </div>
 
                         <button
                           onClick={handleSendMessage}
                           disabled={!messageText.trim() || sending || uploadingFile}
-                          className="p-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/20"
+                          className="p-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
                           title="Enviar mensagem"
                         >
                           {sending || uploadingFile ? (
@@ -1065,7 +1065,7 @@ export default function SuperAdminDashboard() {
 
                       {uploadingFile && (
                         <div className="mt-2 text-center">
-                          <p className="text-xs text-slate-400">Enviando arquivo...</p>
+                          <p className="text-xs text-gray-600">Enviando arquivo...</p>
                         </div>
                       )}
                     </div>
