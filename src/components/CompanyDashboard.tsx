@@ -371,6 +371,22 @@ export default function CompanyDashboard() {
     }
   }, [contacts.length, selectedContact]);
 
+  useEffect(() => {
+    if (selectedContact) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [selectedContact]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
+  }, [messages.length]);
+
   const sendMessage = async (messageData: Partial<Message>) => {
     if (!company || !selectedContact) return;
 
