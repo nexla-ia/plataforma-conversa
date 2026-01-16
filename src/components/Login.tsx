@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
 import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const { signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,29 +20,16 @@ export default function Login() {
       return;
     }
 
-    setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) {
-        if (error.message?.toLowerCase().includes("email not confirmed")) {
-          setErrorMsg("Email não confirmado. Confirme o email ou desative a confirmação no Supabase (dev).");
-        } else if (error.message?.toLowerCase().includes("invalid login credentials")) {
-          setErrorMsg("Email ou senha inválidos.");
-        } else {
-          setErrorMsg(error.message);
-        }
-        setLoading(false);
-        return;
+      await signIn(email.trim(), password);
+    } catch (error: any) {
+      if (error.message?.toLowerCase().includes("email not confirmed")) {
+        setErrorMsg("Email não confirmado. Confirme o email ou desative a confirmação no Supabase (dev).");
+      } else if (error.message?.toLowerCase().includes("invalid login credentials")) {
+        setErrorMsg("Email ou senha inválidos.");
+      } else {
+        setErrorMsg(error.message);
       }
-
-      // O AuthContext vai cuidar do loading de 5 segundos automaticamente
-    } catch (err: any) {
-      setErrorMsg(err?.message ?? "Erro inesperado ao fazer login.");
-      setLoading(false);
     }
   };
 
@@ -135,10 +122,9 @@ export default function Login() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full rounded-lg bg-yellow-400 text-gray-800 py-3 px-6 font-bold text-base hover:bg-yellow-500 disabled:opacity-60 shadow-md hover:shadow-lg transition-all transform hover:scale-[1.02] mt-8"
+                className="w-full rounded-lg bg-yellow-400 text-gray-800 py-3 px-6 font-bold text-base hover:bg-yellow-500 shadow-md hover:shadow-lg transition-all transform hover:scale-[1.02] mt-8"
               >
-                {loading ? "LOADING..." : "SUBMIT"}
+                SUBMIT
               </button>
             </form>
 

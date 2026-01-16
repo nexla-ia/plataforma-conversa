@@ -7,6 +7,8 @@ interface AuthContextType {
   company: Company | null;
   isSuperAdmin: boolean;
   loading: boolean;
+  showWelcome: boolean;
+  showGoodbye: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<{ user: User | null }>;
   signOut: () => Promise<void>;
@@ -20,6 +22,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showGoodbye, setShowGoodbye] = useState(false);
 
   const fetchCompany = async (userId: string) => {
     const { data, error } = await supabase
@@ -49,27 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (mounted) {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchCompany(session.user.id);
-        }
-
-        // Aguardar 5 segundos antes de liberar o loading
-        setTimeout(() => {
-          if (mounted) {
-            setLoading(false);
-          }
-        }, 5000);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchCompany(session.user.id);
       }
-    };
-
-    initAuth();
+      setLoading(false);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       (() => {
@@ -82,15 +72,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })();
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
+    // Mostrar tela de boas-vindas por 5 segundos
+    setShowWelcome(true);
+    setTimeout(() => {
+      setShowWelcome(false);
+    }, 5000);
   };
 
   const signUp = async (email: string, password: string) => {
@@ -114,13 +107,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setCompany(null);
+    // Mostrar tela de despedida por 5 segundos
+    setShowGoodbye(true);
+
+    setTimeout(async () => {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setCompany(null);
+      setShowGoodbye(false);
+    }, 5000);
   };
 
   return (
-    <AuthContext.Provider value={{ user, company, isSuperAdmin, loading, signIn, signUp, signOut, refreshCompany }}>
+    <AuthContext.Provider value={{ user, company, isSuperAdmin, loading, showWelcome, showGoodbye, signIn, signUp, signOut, refreshCompany }}>
       {children}
     </AuthContext.Provider>
   );
