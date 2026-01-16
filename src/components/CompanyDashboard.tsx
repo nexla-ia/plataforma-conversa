@@ -22,6 +22,8 @@ export default function CompanyDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [messageText, setMessageText] = useState('');
   const [imageCaption, setImageCaption] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -452,15 +454,6 @@ export default function CompanyDashboard() {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || sending) return;
-
-    await sendMessage({
-      message: messageText.trim(),
-      tipomessage: 'conversation',
-    });
-  };
-
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -473,52 +466,78 @@ export default function CompanyDashboard() {
     });
   };
 
-  const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
-    if (!company || !selectedContact) return;
+  const handleSendMessage = async () => {
+    if (sending) return;
+    if (!messageText.trim() && !selectedFile) return;
 
-    setUploadingFile(true);
+    setSending(true);
     try {
-      const base64 = await fileToBase64(file);
+      if (selectedFile) {
+        const base64 = await fileToBase64(selectedFile);
+        const isImage = selectedFile.type.startsWith('image/');
+        const isAudio = selectedFile.type.startsWith('audio/');
 
-      const messageData: Partial<Message> = {
-        tipomessage: type === 'image' ? 'imageMessage' : type === 'audio' ? 'audioMessage' : 'documentMessage',
-        mimetype: file.type,
-        base64: base64,
-      };
+        const messageData: Partial<Message> = {
+          tipomessage: isImage ? 'imageMessage' : isAudio ? 'audioMessage' : 'documentMessage',
+          mimetype: selectedFile.type,
+          base64: base64,
+        };
 
-      if (type === 'image') {
-        messageData.message = imageCaption || 'Imagem';
-        if (imageCaption) {
-          messageData.caption = imageCaption;
+        if (isImage) {
+          messageData.message = imageCaption || messageText.trim() || 'Imagem';
+          if (imageCaption) {
+            messageData.caption = imageCaption;
+          }
+        } else if (isAudio) {
+          messageData.message = messageText.trim() || 'Áudio';
+        } else {
+          messageData.message = messageText.trim() || selectedFile.name;
         }
-      } else if (type === 'document') {
-        messageData.message = file.name;
-      } else if (type === 'audio') {
-        messageData.message = 'Áudio';
-      }
 
-      await sendMessage(messageData);
-      setImageCaption('');
+        await sendMessage(messageData);
+        setSelectedFile(null);
+        setFilePreview(null);
+        setImageCaption('');
+      } else {
+        await sendMessage({
+          message: messageText.trim(),
+          tipomessage: 'conversation',
+        });
+      }
     } catch (err) {
-      console.error('Erro ao fazer upload:', err);
-      alert('Erro ao processar arquivo');
+      console.error('Erro ao enviar:', err);
+      alert('Erro ao enviar mensagem');
     } finally {
-      setUploadingFile(false);
+      setSending(false);
     }
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileUpload(file, 'image');
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
+    e.target.value = '';
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileUpload(file, 'document');
+      setSelectedFile(file);
+      setFilePreview(null);
     }
+    e.target.value = '';
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    setImageCaption('');
   };
 
   if (loading && !error) {
@@ -838,27 +857,54 @@ export default function CompanyDashboard() {
             </div>
 
             <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
-              {imageCaption && (
+              {filePreview && (
                 <div className="mb-3 px-4 py-3 bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 rounded-xl">
-                  <p className="text-xs text-teal-600 mb-1 font-medium">Legenda da imagem:</p>
-                  <p className="text-sm text-gray-700">{imageCaption}</p>
-                  <button
-                    onClick={() => setImageCaption('')}
-                    className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
-                  >
-                    Remover legenda
-                  </button>
+                  <div className="flex items-start gap-3">
+                    <img src={filePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
+                    <div className="flex-1">
+                      <p className="text-xs text-teal-600 mb-1 font-medium">Imagem selecionada</p>
+                      <p className="text-xs text-gray-600">{selectedFile?.name}</p>
+                      <button
+                        onClick={clearSelectedFile}
+                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
+                      >
+                        Remover imagem
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
-              <div className="mb-3">
-                <input
-                  type="text"
-                  value={imageCaption}
-                  onChange={(e) => setImageCaption(e.target.value)}
-                  placeholder="Legenda para imagem (opcional)"
-                  className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
-                />
-              </div>
+
+              {selectedFile && selectedFile.type.startsWith('image/') && (
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    value={imageCaption}
+                    onChange={(e) => setImageCaption(e.target.value)}
+                    placeholder="Legenda para imagem (opcional)"
+                    className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {selectedFile && !selectedFile.type.startsWith('image/') && (
+                <div className="mb-3 px-4 py-3 bg-gray-50/80 backdrop-blur-sm border border-gray-200/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-8 h-8 text-gray-400" />
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600 mb-1 font-medium">Arquivo selecionado</p>
+                      <p className="text-xs text-gray-600">{selectedFile?.name}</p>
+                      <button
+                        onClick={clearSelectedFile}
+                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
+                      >
+                        Remover arquivo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-3">
                 <input
                   type="file"
@@ -877,7 +923,7 @@ export default function CompanyDashboard() {
 
                 <button
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={uploadingFile || sending}
+                  disabled={sending || !!selectedFile}
                   className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar imagem"
                 >
@@ -885,7 +931,7 @@ export default function CompanyDashboard() {
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingFile || sending}
+                  disabled={sending || !!selectedFile}
                   className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar arquivo"
                 >
@@ -904,7 +950,7 @@ export default function CompanyDashboard() {
                       }
                     }}
                     placeholder="Digite uma mensagem"
-                    disabled={sending || uploadingFile}
+                    disabled={sending}
                     className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                   />
                   <button
@@ -917,7 +963,7 @@ export default function CompanyDashboard() {
 
                 <button
                   onClick={handleSendMessage}
-                  disabled={!messageText.trim() || sending || uploadingFile}
+                  disabled={(!messageText.trim() && !selectedFile) || sending}
                   className="p-3.5 bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                   title="Enviar mensagem"
                 >
