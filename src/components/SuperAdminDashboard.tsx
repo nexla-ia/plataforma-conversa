@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut } from "lucide-react";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User } from "lucide-react";
 
 type Company = {
   id: string;
@@ -40,6 +40,9 @@ export default function SuperAdminDashboard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
+
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // form
   const [name, setName] = useState("");
@@ -228,6 +231,38 @@ export default function SuperAdminDashboard() {
     await supabase.auth.signOut();
     window.location.href = "/";
   };
+
+  const groupMessagesByContact = () => {
+    const grouped: { [key: string]: Message[] } = {};
+
+    messages.forEach((msg) => {
+      const key = msg.numero || "unknown";
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(msg);
+    });
+
+    return Object.entries(grouped)
+      .map(([numero, msgs]) => ({
+        numero,
+        pushname: msgs[0]?.pushname || numero,
+        lastMessage: msgs[0]?.caption || msgs[0]?.message || "",
+        lastMessageTime: msgs[0]?.created_at || "",
+        messages: msgs.sort((a, b) =>
+          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+        ),
+        unreadCount: 0
+      }))
+      .sort((a, b) =>
+        new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
+      );
+  };
+
+  const filteredChats = groupMessagesByContact().filter(chat =>
+    chat.pushname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chat.numero.includes(searchQuery)
+  );
 
   // =========================
   // UI
@@ -474,10 +509,11 @@ export default function SuperAdminDashboard() {
                   </div>
                 )}
 
-                {companies.map((c) => (
+                {companies.map((c, index) => (
                   <div
                     key={c.id}
-                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm"
+                    className="group rounded-xl bg-slate-800/50 border border-cyan-500/20 p-6 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10 transition-all backdrop-blur-sm hover:scale-105 animate-fadeIn"
+                    style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="text-xl font-semibold text-white">{c.name}</div>
@@ -511,80 +547,116 @@ export default function SuperAdminDashboard() {
           )}
 
           {activeTab === "mensagens" && (
-            <>
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Mensagens Recebidas</h2>
-                <p className="text-slate-400">Últimas 100 mensagens do sistema</p>
+            <div className="h-[calc(100vh-4rem)] flex gap-4">
+              <div className="w-80 bg-slate-800/50 rounded-2xl border border-cyan-500/20 backdrop-blur-sm flex flex-col overflow-hidden">
+                <div className="p-4 border-b border-cyan-500/20">
+                  <h3 className="text-xl font-bold text-white mb-4">Mensagens</h3>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar contato"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-900/50 border border-slate-600 text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  {filteredChats.length === 0 && (
+                    <div className="text-center py-12 text-slate-400">
+                      Nenhuma conversa encontrada
+                    </div>
+                  )}
+
+                  {filteredChats.map((chat, index) => (
+                    <button
+                      key={chat.numero}
+                      onClick={() => setSelectedChat(chat.numero)}
+                      className={`w-full p-4 flex items-center gap-3 border-b border-slate-700/50 hover:bg-slate-700/30 transition-all ${
+                        selectedChat === chat.numero ? "bg-slate-700/50" : ""
+                      } animate-fadeIn`}
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                        <User size={24} />
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-white truncate">{chat.pushname}</span>
+                          <span className="text-xs text-slate-400 flex-shrink-0 ml-2">
+                            {chat.lastMessageTime
+                              ? new Date(chat.lastMessageTime).toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit"
+                                })
+                              : ""}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-400 truncate">{chat.lastMessage}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="bg-slate-800/50 rounded-2xl border border-cyan-500/20 overflow-hidden backdrop-blur-sm">
-                {messages.length === 0 && (
-                  <div className="text-center py-16 text-slate-400">
-                    Nenhuma mensagem encontrada.
+              <div className="flex-1 bg-slate-800/50 rounded-2xl border border-cyan-500/20 backdrop-blur-sm flex flex-col overflow-hidden">
+                {!selectedChat ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <MessageSquare size={64} className="mx-auto mb-4 text-slate-600" />
+                      <p className="text-slate-400 text-lg">Selecione uma conversa para visualizar</p>
+                    </div>
                   </div>
-                )}
+                ) : (
+                  <>
+                    <div className="p-4 border-b border-cyan-500/20 flex items-center gap-3 bg-slate-900/50">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold">
+                        <User size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">
+                          {filteredChats.find((c) => c.numero === selectedChat)?.pushname}
+                        </h3>
+                        <p className="text-xs text-slate-400">{selectedChat}</p>
+                      </div>
+                    </div>
 
-                {messages.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-slate-900/50 border-b border-cyan-500/20">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Data/Hora
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Número
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Nome
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Tipo
-                          </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            Mensagem
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-700/50">
-                        {messages.map((msg) => (
-                          <tr key={msg.id} className="hover:bg-slate-700/30 transition-colors">
-                            <td className="px-6 py-4 text-sm text-slate-300 whitespace-nowrap">
-                              {msg.created_at
-                                ? new Date(msg.created_at).toLocaleString('pt-BR', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    second: '2-digit'
-                                  })
-                                : '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-300">
-                              {msg.numero || '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-300">
-                              {msg.pushname || '-'}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                conversation
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-300">
-                              <div className="max-w-md truncate">
-                                {msg.caption || msg.message || '-'}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-br from-slate-900/30 to-slate-800/30">
+                      {filteredChats
+                        .find((c) => c.numero === selectedChat)
+                        ?.messages.map((msg, index) => (
+                          <div
+                            key={msg.id}
+                            className="flex animate-slideUp"
+                            style={{ animationDelay: `${index * 0.05}s` }}
+                          >
+                            <div className="max-w-[70%] bg-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-3 border border-cyan-500/20 shadow-lg backdrop-blur-sm">
+                              <p className="text-white text-sm leading-relaxed break-words">
+                                {msg.caption || msg.message}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
+                                <span>
+                                  {msg.created_at
+                                    ? new Date(msg.created_at).toLocaleString("pt-BR", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit"
+                                      })
+                                    : ""}
+                                </span>
                               </div>
-                            </td>
-                          </tr>
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
-            </>
+            </div>
           )}
         </div>
       </main>
