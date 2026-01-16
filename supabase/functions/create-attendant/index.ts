@@ -28,11 +28,21 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
+
+    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: {
+        headers: { Authorization: authHeader! },
+      },
+    });
+
+    const { data: { user: requestUser }, error: authError } = await supabaseClient.auth.getUser();
+
+    if (authError || !requestUser) {
       return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
+        JSON.stringify({ error: "Unauthorized - Invalid or missing token" }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -40,26 +50,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { createClient } = await import("npm:@supabase/supabase-js@2");
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user: requestUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !requestUser) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
 
     const { data: isSuperAdmin } = await supabaseAdmin
       .from("super_admins")
