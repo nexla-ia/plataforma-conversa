@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2 } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2, Briefcase, FolderTree } from 'lucide-react';
+import DepartmentsManagement from './DepartmentsManagement';
+import SectorsManagement from './SectorsManagement';
 
 interface Contact {
   phoneNumber: string;
@@ -12,8 +14,11 @@ interface Contact {
   messages: Message[];
 }
 
+type TabType = 'mensagens' | 'departamentos' | 'setores';
+
 export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('mensagens');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -611,14 +616,53 @@ export default function CompanyDashboard() {
           </button>
         </header>
 
-        {error && (
+        <div className="px-4 py-3 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('mensagens')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === 'mensagens'
+                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  : 'bg-white/50 text-gray-600 hover:bg-white/70'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              Mensagens
+            </button>
+            <button
+              onClick={() => setActiveTab('departamentos')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === 'departamentos'
+                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  : 'bg-white/50 text-gray-600 hover:bg-white/70'
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              Departamentos
+            </button>
+            <button
+              onClick={() => setActiveTab('setores')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                activeTab === 'setores'
+                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  : 'bg-white/50 text-gray-600 hover:bg-white/70'
+              }`}
+            >
+              <FolderTree className="w-4 h-4" />
+              Setores
+            </button>
+          </div>
+        </div>
+
+        {error && activeTab === 'mensagens' && (
           <div className="bg-red-50/80 backdrop-blur-sm border-b border-red-200/50 px-5 py-3 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
             <p className="text-red-700 text-sm flex-1">{error}</p>
           </div>
         )}
 
-        <div className="px-5 py-4 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
+        {activeTab === 'mensagens' && (
+          <div className="px-5 py-4 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -630,7 +674,9 @@ export default function CompanyDashboard() {
             />
           </div>
         </div>
+        )}
 
+        {activeTab === 'mensagens' && (
         <div className="flex-1 overflow-y-auto bg-transparent">
           {filteredContacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-6">
@@ -682,10 +728,23 @@ export default function CompanyDashboard() {
             </div>
           )}
         </div>
+        )}
+
+        {activeTab === 'departamentos' && (
+          <div className="flex-1 overflow-y-auto bg-transparent">
+            <DepartmentsManagement />
+          </div>
+        )}
+
+        {activeTab === 'setores' && (
+          <div className="flex-1 overflow-y-auto bg-transparent">
+            <SectorsManagement />
+          </div>
+        )}
       </div>
 
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
-        {selectedContactData ? (
+        {activeTab === 'mensagens' && selectedContactData ? (
           <>
             <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
               <div className="flex items-center gap-3">
@@ -999,7 +1058,7 @@ export default function CompanyDashboard() {
               )}
             </div>
           </>
-        ) : (
+        ) : activeTab === 'mensagens' ? (
           <div className="flex-1 flex items-center justify-center bg-transparent">
             <div className="text-center p-8">
               <div className="w-32 h-32 bg-gradient-to-br from-teal-100 to-teal-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
@@ -1009,7 +1068,15 @@ export default function CompanyDashboard() {
               <p className="text-gray-500 text-sm">Escolha um contato na lista à esquerda</p>
             </div>
           </div>
-        )}
+        ) : activeTab === 'departamentos' ? (
+          <div className="flex-1 bg-transparent overflow-y-auto">
+            <DepartmentsManagement />
+          </div>
+        ) : activeTab === 'setores' ? (
+          <div className="flex-1 bg-transparent overflow-y-auto">
+            <SectorsManagement />
+          </div>
+        ) : null}
       </div>
 
       {imageModalOpen && (
