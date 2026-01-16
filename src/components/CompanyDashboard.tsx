@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2, Briefcase, FolderTree } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2, Briefcase, FolderTree, UserCircle2, Tag } from 'lucide-react';
 import DepartmentsManagement from './DepartmentsManagement';
 import SectorsManagement from './SectorsManagement';
+import AttendantsManagement from './AttendantsManagement';
+import TagsManagement from './TagsManagement';
 
 interface Contact {
   phoneNumber: string;
@@ -14,7 +16,7 @@ interface Contact {
   messages: Message[];
 }
 
-type TabType = 'mensagens' | 'departamentos' | 'setores';
+type TabType = 'mensagens' | 'departamentos' | 'setores' | 'atendentes' | 'tags';
 
 export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
@@ -617,10 +619,10 @@ export default function CompanyDashboard() {
         </header>
 
         <div className="px-4 py-3 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto">
             <button
               onClick={() => setActiveTab('mensagens')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'mensagens'
                   ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
@@ -631,7 +633,7 @@ export default function CompanyDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('departamentos')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'departamentos'
                   ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
@@ -642,7 +644,7 @@ export default function CompanyDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('setores')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'setores'
                   ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
@@ -650,6 +652,28 @@ export default function CompanyDashboard() {
             >
               <FolderTree className="w-4 h-4" />
               Setores
+            </button>
+            <button
+              onClick={() => setActiveTab('atendentes')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
+                activeTab === 'atendentes'
+                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  : 'bg-white/50 text-gray-600 hover:bg-white/70'
+              }`}
+            >
+              <UserCircle2 className="w-4 h-4" />
+              Atendentes
+            </button>
+            <button
+              onClick={() => setActiveTab('tags')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
+                activeTab === 'tags'
+                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  : 'bg-white/50 text-gray-600 hover:bg-white/70'
+              }`}
+            >
+              <Tag className="w-4 h-4" />
+              Tags
             </button>
           </div>
         </div>
@@ -1063,6 +1087,14 @@ export default function CompanyDashboard() {
         ) : activeTab === 'setores' ? (
           <div className="flex-1 bg-transparent overflow-y-auto">
             <SectorsManagement />
+          </div>
+        ) : activeTab === 'atendentes' ? (
+          <div className="flex-1 bg-transparent overflow-y-auto">
+            <AttendantsManagement />
+          </div>
+        ) : activeTab === 'tags' ? (
+          <div className="flex-1 bg-transparent overflow-y-auto">
+            <TagsManagement />
           </div>
         ) : null}
       </div>
