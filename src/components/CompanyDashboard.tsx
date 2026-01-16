@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, RefreshCw, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2 } from 'lucide-react';
 
 interface Contact {
   phoneNumber: string;
@@ -16,7 +16,6 @@ export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -149,12 +148,10 @@ export default function CompanyDashboard() {
       return;
     }
 
-    setRefreshing(true);
     setError(null);
 
     const timeout = setTimeout(() => {
       setLoading(false);
-      setRefreshing(false);
       setError('Tempo esgotado ao carregar mensagens');
     }, 10000);
 
@@ -196,7 +193,6 @@ export default function CompanyDashboard() {
       setError(`Erro ao carregar mensagens: ${err.message}`);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [company]);
 
@@ -533,11 +529,11 @@ export default function CompanyDashboard() {
 
   if (loading && !error) {
     return (
-      <div className="h-screen flex flex-col bg-[#0b141a]">
+      <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="w-8 h-8 text-teal-500 animate-spin mx-auto mb-2" />
-            <p className="text-gray-300">Carregando mensagens...</p>
+            <Loader2 className="w-10 h-10 text-teal-500 animate-spin mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">Carregando mensagens...</p>
           </div>
         </div>
       </div>
@@ -560,71 +556,63 @@ export default function CompanyDashboard() {
   const messageGroups = groupMessagesByDate(currentMessages);
 
   return (
-    <div className="h-screen flex bg-gray-50 overflow-hidden">
+    <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
       <div
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } md:flex w-full md:w-[380px] bg-white border-r border-gray-200 flex-col`}
+        } md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
       >
-        <header className="bg-white px-5 py-4 flex items-center justify-between border-b border-gray-200">
+        <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-teal-500 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-md">
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-gray-900 font-semibold text-base">{company?.name}</h2>
+              <h2 className="text-gray-900 font-bold text-base tracking-tight">{company?.name}</h2>
               <p className="text-xs text-gray-500">Atendimento Multicanal</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => fetchMessages()}
-              disabled={refreshing}
-              className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
-              title="Atualizar"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={() => signOut()}
-              className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            onClick={() => signOut()}
+            className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </header>
 
         {error && (
-          <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-            <p className="text-red-700 text-xs flex-1">{error}</p>
+          <div className="bg-red-50/80 backdrop-blur-sm border-b border-red-200/50 px-5 py-3 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
           </div>
         )}
 
-        <div className="px-4 py-3 bg-white border-b border-gray-200">
+        <div className="px-5 py-4 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Pesquisar contato"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 text-gray-900 text-sm pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              className="w-full bg-white/60 text-gray-900 text-sm pl-12 pr-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="flex-1 overflow-y-auto bg-transparent">
           {filteredContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full p-4">
-              <MessageSquare className="w-12 h-12 text-gray-300 mb-3" />
-              <p className="text-gray-500 text-sm text-center">
+            <div className="flex flex-col items-center justify-center h-full p-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-teal-100 to-teal-200 rounded-full flex items-center justify-center mb-4">
+                <MessageSquare className="w-10 h-10 text-teal-500" />
+              </div>
+              <p className="text-gray-500 text-sm text-center font-medium">
                 {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="p-2 space-y-1">
               {filteredContacts.map((contact) => (
                 <button
                   key={contact.phoneNumber}
@@ -634,24 +622,26 @@ export default function CompanyDashboard() {
                       setSidebarOpen(false);
                     }
                   }}
-                  className={`w-full px-4 py-4 flex items-center gap-3 hover:bg-white transition ${
-                    selectedContact === contact.phoneNumber ? 'bg-teal-50 border-r-4 border-teal-500' : 'bg-gray-50'
+                  className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
+                    selectedContact === contact.phoneNumber
+                      ? 'bg-gradient-to-r from-teal-50 to-teal-100/50 shadow-sm'
+                      : 'hover:bg-white/40'
                   }`}
                 >
-                  <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
-                    <User className="w-5 h-5 text-white" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
+                    <User className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1 text-left overflow-hidden">
-                    <div className="flex items-center justify-between mb-0.5">
+                    <div className="flex items-center justify-between mb-1">
                       <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
-                      <span className="text-xs text-gray-400 ml-2 font-medium">
+                      <span className="text-xs text-gray-400 ml-2">
                         {formatTime(contact.lastMessageTime)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
                       {contact.unreadCount > 0 && (
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
+                        <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center ml-2">
                           <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
                         </div>
                       )}
@@ -667,40 +657,40 @@ export default function CompanyDashboard() {
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
         {selectedContactData ? (
           <>
-            <header className="bg-white px-5 py-4 flex items-center justify-between shadow-sm border-b border-gray-200">
+            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
+                  className="md:hidden p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
-                <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center shadow-sm">
-                  <User className="w-5 h-5 text-white" />
+                <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-md">
+                  <User className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-gray-900 font-semibold text-base">{selectedContactData.name}</h1>
+                  <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
                   <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
                 </div>
               </div>
               <button
-                className="p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100 rounded-full transition"
+                className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
                 title="Mais opções"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-gray-50 px-6 py-4">
+            <div className="flex-1 overflow-y-auto bg-transparent px-6 py-4">
               <div className="max-w-5xl mx-auto">
                 {Object.entries(messageGroups).map(([date, msgs]) => (
                   <div key={date} className="mb-6">
-                    <div className="flex justify-center mb-4">
-                      <div className="bg-white px-3 py-1 rounded-full shadow-sm">
-                        <p className="text-[11px] text-gray-500 font-medium">{date}</p>
+                    <div className="flex justify-center mb-5">
+                      <div className="bg-white/60 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50">
+                        <p className="text-[11px] text-gray-600 font-semibold tracking-wide">{date}</p>
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {msgs.map((msg) => {
                         const isSentMessage = msg['minha?'] === 'true';
                         const base64Type = msg.base64 ? detectBase64Type(msg.base64) : null;
@@ -713,10 +703,10 @@ export default function CompanyDashboard() {
                             className={`flex ${isSentMessage ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
-                              className={`max-w-[65%] rounded-2xl ${
+                              className={`max-w-[70%] rounded-2xl ${
                                 isSentMessage
-                                  ? 'bg-teal-500 text-white rounded-br-sm'
-                                  : 'bg-white text-gray-900 rounded-bl-sm shadow-sm'
+                                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-br-md shadow-lg'
+                                  : 'bg-white/80 backdrop-blur-sm text-gray-900 rounded-bl-md shadow-md border border-gray-200/50'
                               }`}
                             >
                               {msg.urlimagem && !hasBase64Content && (
@@ -853,29 +843,29 @@ export default function CompanyDashboard() {
               </div>
             </div>
 
-            <div className="bg-white px-5 py-3.5 border-t border-gray-200">
+            <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
               {imageCaption && (
-                <div className="mb-2 px-3 py-2 bg-teal-50 border border-teal-200 rounded-lg">
-                  <p className="text-xs text-teal-600 mb-1">Legenda da imagem:</p>
+                <div className="mb-3 px-4 py-3 bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 rounded-xl">
+                  <p className="text-xs text-teal-600 mb-1 font-medium">Legenda da imagem:</p>
                   <p className="text-sm text-gray-700">{imageCaption}</p>
                   <button
                     onClick={() => setImageCaption('')}
-                    className="text-xs text-red-500 hover:text-red-700 mt-1"
+                    className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
                   >
                     Remover legenda
                   </button>
                 </div>
               )}
-              <div className="mb-2">
+              <div className="mb-3">
                 <input
                   type="text"
                   value={imageCaption}
                   onChange={(e) => setImageCaption(e.target.value)}
                   placeholder="Legenda para imagem (opcional)"
-                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-teal-400 transition"
+                  className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <input
                   type="file"
                   ref={imageInputRef}
@@ -894,7 +884,7 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={uploadingFile || sending}
-                  className="p-2 text-gray-400 hover:text-teal-500 hover:bg-gray-50 rounded-lg transition disabled:opacity-50"
+                  className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar imagem"
                 >
                   <ImageIcon className="w-5 h-5" />
@@ -902,13 +892,13 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingFile || sending}
-                  className="p-2 text-gray-400 hover:text-teal-500 hover:bg-gray-50 rounded-lg transition disabled:opacity-50"
+                  className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar arquivo"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
 
-                <div className="flex-1 bg-gray-50 rounded-3xl flex items-center px-4 py-2.5 border border-gray-200 focus-within:border-teal-400 transition">
+                <div className="flex-1 bg-white/60 rounded-2xl flex items-center px-5 py-3 border border-gray-200/50 focus-within:border-teal-400 focus-within:bg-white transition-all">
                   <input
                     type="text"
                     value={messageText}
@@ -924,7 +914,7 @@ export default function CompanyDashboard() {
                     className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                   />
                   <button
-                    className="p-1 text-gray-400 hover:text-teal-500 transition ml-1"
+                    className="p-1.5 text-gray-400 hover:text-teal-500 transition-all ml-2"
                     title="Emoji"
                   >
                     <Smile className="w-5 h-5" />
@@ -934,11 +924,11 @@ export default function CompanyDashboard() {
                 <button
                   onClick={handleSendMessage}
                   disabled={!messageText.trim() || sending || uploadingFile}
-                  className="p-3 bg-teal-500 hover:bg-teal-600 rounded-full transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
+                  className="p-3.5 bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                   title="Enviar mensagem"
                 >
                   {sending || uploadingFile ? (
-                    <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
                   ) : (
                     <Send className="w-5 h-5 text-white" />
                   )}
@@ -946,20 +936,20 @@ export default function CompanyDashboard() {
               </div>
 
               {uploadingFile && (
-                <div className="mt-2 text-center">
-                  <p className="text-xs text-gray-500">Enviando arquivo...</p>
+                <div className="mt-3 text-center">
+                  <p className="text-sm text-gray-500 font-medium">Enviando arquivo...</p>
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <div className="w-32 h-32 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="flex-1 flex items-center justify-center bg-transparent">
+            <div className="text-center p-8">
+              <div className="w-32 h-32 bg-gradient-to-br from-teal-100 to-teal-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <MessageSquare className="w-16 h-16 text-teal-500" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">Selecione uma conversa para começar</h3>
-              <p className="text-gray-400 text-sm">Escolha um contato na lista à esquerda</p>
+              <h3 className="text-2xl font-bold text-gray-700 mb-3 tracking-tight">Selecione uma conversa para começar</h3>
+              <p className="text-gray-500 text-sm">Escolha um contato na lista à esquerda</p>
             </div>
           </div>
         )}
