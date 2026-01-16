@@ -43,6 +43,7 @@ export default function AttendantsManagement() {
     name: '',
     email: '',
     phone: '',
+    password: '',
     department_id: '',
     sector_id: '',
     is_active: true,
@@ -112,19 +113,24 @@ export default function AttendantsManagement() {
     e.preventDefault();
     if (!company?.id) return;
 
+    if (!editingId && !formData.password) {
+      alert('Senha é obrigatória para criar novo atendente');
+      return;
+    }
+
     setSaving(true);
     try {
-      const dataToSave = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        department_id: formData.department_id || null,
-        sector_id: formData.sector_id || null,
-        is_active: formData.is_active,
-        updated_at: new Date().toISOString(),
-      };
-
       if (editingId) {
+        const dataToSave = {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          department_id: formData.department_id || null,
+          sector_id: formData.sector_id || null,
+          is_active: formData.is_active,
+          updated_at: new Date().toISOString(),
+        };
+
         const { error } = await supabase
           .from('attendants')
           .update(dataToSave)
@@ -132,23 +138,41 @@ export default function AttendantsManagement() {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('attendants')
-          .insert([{
-            company_id: company.id,
-            ...dataToSave,
-          }]);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Não autenticado');
 
-        if (error) throw error;
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-attendant`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            phone: formData.phone,
+            company_id: company.id,
+            department_id: formData.department_id || null,
+            sector_id: formData.sector_id || null,
+            is_active: formData.is_active,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao criar atendente');
+        }
       }
 
-      setFormData({ name: '', email: '', phone: '', department_id: '', sector_id: '', is_active: true });
+      setFormData({ name: '', email: '', phone: '', password: '', department_id: '', sector_id: '', is_active: true });
       setShowForm(false);
       setEditingId(null);
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar atendente:', error);
-      alert('Erro ao salvar atendente');
+      alert(error.message || 'Erro ao salvar atendente');
     } finally {
       setSaving(false);
     }
@@ -159,6 +183,7 @@ export default function AttendantsManagement() {
       name: attendant.name,
       email: attendant.email,
       phone: attendant.phone,
+      password: '',
       department_id: attendant.department_id || '',
       sector_id: attendant.sector_id || '',
       is_active: attendant.is_active,
@@ -187,7 +212,7 @@ export default function AttendantsManagement() {
   };
 
   const handleCancel = () => {
-    setFormData({ name: '', email: '', phone: '', department_id: '', sector_id: '', is_active: true });
+    setFormData({ name: '', email: '', phone: '', password: '', department_id: '', sector_id: '', is_active: true });
     setShowForm(false);
     setEditingId(null);
   };
@@ -282,9 +307,28 @@ export default function AttendantsManagement() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="email@exemplo.com"
                   className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
+                  disabled={!!editingId}
                 />
               </div>
             </div>
+
+            {!editingId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Senha de acesso"
+                  minLength={6}
+                  className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mínimo de 6 caracteres</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

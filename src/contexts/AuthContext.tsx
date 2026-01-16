@@ -2,10 +2,24 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User } from '@supabase/supabase-js';
 import { supabase, Company } from '../lib/supabase';
 
+interface Attendant {
+  id: string;
+  company_id: string;
+  department_id: string | null;
+  sector_id: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  is_active: boolean;
+  user_id: string;
+}
+
 interface AuthContextType {
   user: User | null;
   company: Company | null;
+  attendant: Attendant | null;
   isSuperAdmin: boolean;
+  isAttendant: boolean;
   loading: boolean;
   showWelcome: boolean;
   showGoodbye: boolean;
@@ -20,12 +34,32 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [attendant, setAttendant] = useState<Attendant | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAttendant, setIsAttendant] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showGoodbye, setShowGoodbye] = useState(false);
 
   const fetchCompany = async (userId: string) => {
+    const { data: attendantData, error: attendantError } = await supabase
+      .from('attendants')
+      .select('*, companies(*)')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!attendantError && attendantData) {
+      setAttendant(attendantData);
+      setIsAttendant(true);
+      if (attendantData.companies) {
+        const companyData = Array.isArray(attendantData.companies)
+          ? attendantData.companies[0]
+          : attendantData.companies;
+        setCompany(companyData);
+      }
+      return;
+    }
+
     const { data, error } = await supabase
       .from('companies')
       .select('*')
@@ -36,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCompany(data);
     }
 
-    // Verificar se é super admin
     const { data: saData, error: saError } = await supabase
       .from('super_admins')
       .select('user_id')
@@ -68,6 +101,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           fetchCompany(session.user.id);
         } else {
           setCompany(null);
+          setAttendant(null);
+          setIsAttendant(false);
+          setIsSuperAdmin(false);
         }
       })();
     });
@@ -107,19 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Mostrar tela de despedida por 5 segundos
     setShowGoodbye(true);
 
     setTimeout(async () => {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setCompany(null);
+      setAttendant(null);
+      setIsAttendant(false);
+      setIsSuperAdmin(false);
       setShowGoodbye(false);
     }, 5000);
   };
 
   return (
-    <AuthContext.Provider value={{ user, company, isSuperAdmin, loading, showWelcome, showGoodbye, signIn, signUp, signOut, refreshCompany }}>
+    <AuthContext.Provider value={{ user, company, attendant, isSuperAdmin, isAttendant, loading, showWelcome, showGoodbye, signIn, signUp, signOut, refreshCompany }}>
       {children}
     </AuthContext.Provider>
   );

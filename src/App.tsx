@@ -2,10 +2,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import CompanyDashboard from './components/CompanyDashboard';
+import AttendantDashboard from './components/AttendantDashboard';
 import { Loader2 } from 'lucide-react';
 
 function AppContent() {
-  const { user, company, isSuperAdmin, loading, showWelcome, showGoodbye } = useAuth();
+  const { user, company, isSuperAdmin, isAttendant, loading, showWelcome, showGoodbye } = useAuth();
 
   if (loading) {
     return (
@@ -44,6 +45,10 @@ function AppContent() {
 
   if (!user) {
     return <Login />;
+  }
+
+  if (isAttendant) {
+    return <AttendantDashboard />;
   }
 
   if (company?.is_super_admin || isSuperAdmin) {
