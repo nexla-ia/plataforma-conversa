@@ -636,23 +636,6 @@ export default function SuperAdminDashboard() {
               </div>
             )}
           </button>
-
-          <button
-            onClick={() => setActiveTab("mensagens")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-              activeTab === "mensagens"
-                ? "bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-600 border border-teal-200 shadow-sm"
-                : "text-gray-600 hover:text-teal-600 hover:bg-gray-50"
-            }`}
-          >
-            <MessageSquare size={20} />
-            {sidebarOpen && (
-              <div className="flex-1 text-left">
-                <div className="font-medium">Mensagens</div>
-                <div className="text-xs opacity-70">{messages.length} recebidas</div>
-              </div>
-            )}
-          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-200/50">
