@@ -544,9 +544,6 @@ export default function SuperAdminDashboard() {
                           <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
                             Mensagem
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-cyan-400 uppercase tracking-wider">
-                            API Key
-                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-700/50">
@@ -554,25 +551,31 @@ export default function SuperAdminDashboard() {
                           <tr key={msg.id} className="hover:bg-slate-700/30 transition-colors">
                             <td className="px-6 py-4 text-sm text-slate-300 whitespace-nowrap">
                               {msg.created_at
-                                ? new Date(msg.created_at).toLocaleString('pt-BR')
+                                ? new Date(msg.created_at).toLocaleString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                  })
                                 : '-'}
                             </td>
-                            <td className="px-6 py-4 text-sm text-white font-medium">
+                            <td className="px-6 py-4 text-sm text-slate-300">
                               {msg.numero || '-'}
                             </td>
                             <td className="px-6 py-4 text-sm text-slate-300">
                               {msg.pushname || '-'}
                             </td>
                             <td className="px-6 py-4 text-sm">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                {msg.tipomessage || 'text'}
+                              <span className="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                conversation
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm text-slate-300 max-w-xs truncate">
-                              {msg.caption || msg.message || '-'}
-                            </td>
-                            <td className="px-6 py-4 text-xs font-mono text-slate-400 max-w-xs truncate">
-                              {msg.apikey_instancia}
+                            <td className="px-6 py-4 text-sm text-slate-300">
+                              <div className="max-w-md truncate">
+                                {msg.caption || msg.message || '-'}
+                              </div>
                             </td>
                           </tr>
                         ))}
