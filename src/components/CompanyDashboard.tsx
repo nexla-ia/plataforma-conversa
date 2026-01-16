@@ -729,18 +729,6 @@ export default function CompanyDashboard() {
           )}
         </div>
         )}
-
-        {activeTab === 'departamentos' && (
-          <div className="flex-1 overflow-y-auto bg-transparent">
-            <DepartmentsManagement />
-          </div>
-        )}
-
-        {activeTab === 'setores' && (
-          <div className="flex-1 overflow-y-auto bg-transparent">
-            <SectorsManagement />
-          </div>
-        )}
       </div>
 
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
