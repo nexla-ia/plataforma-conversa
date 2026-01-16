@@ -138,17 +138,8 @@ export default function AttendantsManagement() {
 
         if (error) throw error;
       } else {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Não autenticado');
-
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-attendant`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const { data, error } = await supabase.functions.invoke('create-attendant', {
+          body: {
             name: formData.name,
             email: formData.email,
             password: formData.password,
@@ -157,15 +148,19 @@ export default function AttendantsManagement() {
             department_id: formData.department_id || null,
             sector_id: formData.sector_id || null,
             is_active: formData.is_active,
-          }),
+          },
         });
 
-        const result = await response.json();
-        if (!response.ok) {
-          console.error('Erro completo da resposta:', result);
-          const errorMessage = result.error || result.message || 'Erro ao criar atendente';
-          const errorDetails = result.details ? `\nDetalhes: ${result.details}` : '';
-          const errorHint = result.hint ? `\nDica: ${result.hint}` : '';
+        if (error) {
+          console.error('Erro completo da resposta:', error);
+          throw new Error(error.message || 'Erro ao criar atendente');
+        }
+
+        if (data?.error) {
+          console.error('Erro retornado pela função:', data);
+          const errorMessage = data.error || 'Erro ao criar atendente';
+          const errorDetails = data.details ? `\nDetalhes: ${data.details}` : '';
+          const errorHint = data.hint ? `\nDica: ${data.hint}` : '';
           throw new Error(`${errorMessage}${errorDetails}${errorHint}`);
         }
       }
