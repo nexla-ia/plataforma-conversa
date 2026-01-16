@@ -162,7 +162,11 @@ export default function AttendantsManagement() {
 
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.error || 'Erro ao criar atendente');
+          console.error('Erro completo da resposta:', result);
+          const errorMessage = result.error || result.message || 'Erro ao criar atendente';
+          const errorDetails = result.details ? `\nDetalhes: ${result.details}` : '';
+          const errorHint = result.hint ? `\nDica: ${result.hint}` : '';
+          throw new Error(`${errorMessage}${errorDetails}${errorHint}`);
         }
       }
 
@@ -172,7 +176,9 @@ export default function AttendantsManagement() {
       fetchData();
     } catch (error: any) {
       console.error('Erro ao salvar atendente:', error);
-      alert(error.message || 'Erro ao salvar atendente');
+      console.error('Stack trace:', error.stack);
+      const errorMsg = error.message || 'Erro ao salvar atendente';
+      alert(`Erro: ${errorMsg}\n\nVerifique o console para mais detalhes.`);
     } finally {
       setSaving(false);
     }
