@@ -440,6 +440,18 @@ export default function SuperAdminDashboard() {
     }, apiKey);
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        resolve(base64.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileUpload = async (file: File, type: 'image' | 'document') => {
     if (!selectedChat) return;
 
@@ -450,37 +462,20 @@ export default function SuperAdminDashboard() {
 
     setUploadingFile(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-      const filePath = `${apiKey}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('message-files')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error('Erro ao fazer upload:', uploadError);
-        alert('Erro ao fazer upload do arquivo');
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('message-files')
-        .getPublicUrl(filePath);
+      const base64 = await fileToBase64(file);
 
       const messageData: Partial<Message> = {
         tipomessage: type === 'image' ? 'imageMessage' : 'documentMessage',
         mimetype: file.type,
+        base64: base64,
       };
 
       if (type === 'image') {
-        messageData.urlimagem = publicUrl;
         messageData.message = imageCaption || 'Imagem';
         if (imageCaption) {
           messageData.caption = imageCaption;
         }
       } else {
-        messageData.urlpdf = publicUrl;
         messageData.message = file.name;
       }
 
@@ -488,7 +483,7 @@ export default function SuperAdminDashboard() {
       setImageCaption('');
     } catch (err) {
       console.error('Erro ao fazer upload:', err);
-      alert('Erro ao fazer upload do arquivo');
+      alert('Erro ao processar arquivo');
     } finally {
       setUploadingFile(false);
     }
