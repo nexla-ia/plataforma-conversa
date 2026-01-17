@@ -31,17 +31,33 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
 
-    console.log('Headers:', { authHeader: authHeader ? 'present' : 'missing' });
+    console.log('Headers received:', {
+      authorization: authHeader ? 'present' : 'missing',
+      authHeaderValue: authHeader
+    });
+
+    if (!authHeader) {
+      console.error('Missing Authorization header');
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - Missing Authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const { createClient } = await import("npm:@supabase/supabase-js@2");
 
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: {
-        headers: { Authorization: authHeader! },
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
     });
 
-    const { data: { user: requestUser }, error: authError } = await supabaseClient.auth.getUser();
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: requestUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     console.log('Auth check:', {
       hasUser: !!requestUser,
@@ -50,21 +66,18 @@ Deno.serve(async (req: Request) => {
     });
 
     if (authError || !requestUser) {
+      console.error('Auth error:', authError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized - Invalid or missing token", details: authError?.message }),
+        JSON.stringify({
+          error: "Unauthorized - Invalid or expired token",
+          details: authError?.message
+        }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
 
     const { data: isSuperAdmin } = await supabaseAdmin
       .from("super_admins")
