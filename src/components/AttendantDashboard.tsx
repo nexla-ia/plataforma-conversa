@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck } from 'lucide-react';
+import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, MoreVertical, X, Tag, Building2, Layers } from 'lucide-react';
 
 interface Message {
   id?: number;
@@ -14,6 +14,8 @@ interface Message {
   created_at: string;
   apikey_instancia?: string;
   sector_id?: string;
+  department_id?: string;
+  tag_id?: string;
   date_time?: string;
   'minha?'?: string;
 }
@@ -32,6 +34,17 @@ interface Sector {
   name: string;
 }
 
+interface Department {
+  id: string;
+  name: string;
+}
+
+interface TagItem {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export default function AttendantDashboard() {
   const { attendant, company, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,12 +54,22 @@ export default function AttendantDashboard() {
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedSector, setSelectedSector] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (attendant && company) {
       fetchSector();
       fetchMessages();
+      fetchDepartments();
+      fetchSectors();
+      fetchTags();
       subscribeToMessages();
     } else {
       setLoading(false);
@@ -76,6 +99,103 @@ export default function AttendantDashboard() {
       }
     } catch (error) {
       console.error('Erro ao carregar setor:', error);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    if (!company?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('company_id', company.id)
+        .order('name');
+
+      if (!error && data) {
+        setDepartments(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar departamentos:', error);
+    }
+  };
+
+  const fetchSectors = async () => {
+    if (!company?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('sectors')
+        .select('id, name')
+        .eq('company_id', company.id)
+        .order('name');
+
+      if (!error && data) {
+        setSectors(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar setores:', error);
+    }
+  };
+
+  const fetchTags = async () => {
+    if (!company?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('id, name, color')
+        .eq('company_id', company.id)
+        .order('name');
+
+      if (!error && data) {
+        setTags(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar tags:', error);
+    }
+  };
+
+  const handleUpdateContactInfo = async () => {
+    if (!selectedContact || !company?.api_key) return;
+
+    try {
+      const updates: any = {};
+
+      if (selectedDepartment) {
+        updates.department_id = selectedDepartment;
+      }
+
+      if (selectedSector) {
+        updates.sector_id = selectedSector;
+      }
+
+      if (selectedTag) {
+        updates.tag_id = selectedTag;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        alert('Selecione pelo menos uma opção para atualizar');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('messages')
+        .update(updates)
+        .eq('apikey_instancia', company.api_key)
+        .eq('numero', selectedContact);
+
+      if (error) throw error;
+
+      alert('Informações atualizadas com sucesso!');
+      setShowOptionsMenu(false);
+      setSelectedDepartment('');
+      setSelectedSector('');
+      setSelectedTag('');
+      fetchMessages();
+    } catch (error) {
+      console.error('Erro ao atualizar informações:', error);
+      alert('Erro ao atualizar informações');
     }
   };
 
@@ -459,6 +579,13 @@ export default function AttendantDashboard() {
                   <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
                 </div>
               </div>
+              <button
+                onClick={() => setShowOptionsMenu(true)}
+                className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                title="Mais opções"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
             </header>
 
             <div className="flex-1 overflow-y-auto bg-transparent px-6 py-4">
@@ -565,6 +692,106 @@ export default function AttendantDashboard() {
           </div>
         )}
       </div>
+
+      {showOptionsMenu && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between rounded-t-3xl">
+              <h2 className="text-xl font-bold text-gray-900">Definir Informações</h2>
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  setSelectedDepartment('');
+                  setSelectedSector('');
+                  setSelectedTag('');
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Building2 className="w-4 h-4 text-blue-600" />
+                  Departamento
+                </label>
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione um departamento</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  Setor
+                </label>
+                <select
+                  value={selectedSector}
+                  onChange={(e) => setSelectedSector(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione um setor</option>
+                  {sectors.map((sec) => (
+                    <option key={sec.id} value={sec.id}>
+                      {sec.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Tag className="w-4 h-4 text-blue-600" />
+                  Tag
+                </label>
+                <select
+                  value={selectedTag}
+                  onChange={(e) => setSelectedTag(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione uma tag</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setSelectedDepartment('');
+                    setSelectedSector('');
+                    setSelectedTag('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateContactInfo}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
