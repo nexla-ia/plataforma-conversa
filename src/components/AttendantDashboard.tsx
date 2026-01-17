@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send } from 'lucide-react';
+import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck } from 'lucide-react';
 
 interface Message {
   id?: number;
   numero: string | null;
+  sender?: string | null;
   pushname: string | null;
   tipomessage: string | null;
   message: string | null;
@@ -13,6 +14,17 @@ interface Message {
   created_at: string;
   apikey_instancia?: string;
   sector_id?: string;
+  date_time?: string;
+  'minha?'?: string;
+}
+
+interface Contact {
+  phoneNumber: string;
+  name: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  unreadCount: number;
+  messages: Message[];
 }
 
 interface Sector {
@@ -26,6 +38,9 @@ export default function AttendantDashboard() {
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sector, setSector] = useState<Sector | null>(null);
+  const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,19 +87,35 @@ export default function AttendantDashboard() {
 
     setLoading(true);
     try {
-      let query = supabase
+      let receivedQuery = supabase
         .from('messages')
         .select('*')
         .eq('apikey_instancia', company.api_key);
 
       if (attendant?.sector_id) {
-        query = query.or(`sector_id.eq.${attendant.sector_id},sector_id.is.null`);
+        receivedQuery = receivedQuery.or(`sector_id.eq.${attendant.sector_id},sector_id.is.null`);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: true });
+      const [receivedResult, sentResult] = await Promise.all([
+        receivedQuery,
+        supabase
+          .from('sent_messages')
+          .select('*')
+          .eq('apikey_instancia', company.api_key)
+      ]);
 
-      if (error) throw error;
-      setMessages(data || []);
+      if (receivedResult.error) throw receivedResult.error;
+      if (sentResult.error) throw sentResult.error;
+
+      const allMessages = [
+        ...(receivedResult.data || []),
+        ...(sentResult.data || [])
+      ].sort((a, b) => {
+        return getMessageTimestamp(a) - getMessageTimestamp(b);
+      });
+
+      setMessages(allMessages);
+      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('Erro ao carregar mensagens:', error);
     } finally {
@@ -100,19 +131,25 @@ export default function AttendantDashboard() {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
           filter: `apikey_instancia=eq.${company.api_key}`,
         },
-        (payload) => {
-          const newMsg = payload.new as Message;
-
-          if (attendant?.sector_id && newMsg.sector_id && newMsg.sector_id !== attendant.sector_id) {
-            return;
-          }
-
-          setMessages((prev) => [...prev, newMsg]);
+        () => {
+          fetchMessages();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sent_messages',
+          filter: `apikey_instancia=eq.${company.api_key}`,
+        },
+        () => {
+          fetchMessages();
         }
       )
       .subscribe();
@@ -124,23 +161,27 @@ export default function AttendantDashboard() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim() || !company?.api_key) return;
+    if (!messageText.trim() || !company?.api_key || !selectedContact) return;
 
     const newMessage: Partial<Message> = {
-      numero: null,
+      numero: selectedContact,
+      sender: selectedContact,
       pushname: attendant?.name || null,
-      tipomessage: 'text',
+      tipomessage: 'conversation',
       message: messageText.trim(),
       timestamp: Date.now().toString(),
       apikey_instancia: company.api_key,
       sector_id: attendant?.sector_id || undefined,
+      date_time: new Date().toISOString(),
+      'minha?': 'true',
     };
 
     try {
-      const { error } = await supabase.from('messages').insert([newMessage]);
+      const { error } = await supabase.from('sent_messages').insert([newMessage]);
 
       if (error) throw error;
       setMessageText('');
+      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       alert('Erro ao enviar mensagem');
@@ -185,135 +226,344 @@ export default function AttendantDashboard() {
     }
   };
 
+  const getContactId = (msg: Message): string => {
+    return msg.numero || msg.sender || 'Desconhecido';
+  };
+
+  const getPhoneNumber = (contactId: string): string => {
+    if (contactId.includes('@')) {
+      return contactId.split('@')[0];
+    }
+    return contactId;
+  };
+
+  const getContactName = (msg: Message): string => {
+    return msg.pushname || getPhoneNumber(getContactId(msg));
+  };
+
+  const getMessageTimestamp = (msg: Message): number => {
+    if (msg.timestamp && !isNaN(Number(msg.timestamp))) {
+      return Number(msg.timestamp) * 1000;
+    }
+    if (msg.date_time) {
+      return new Date(msg.date_time).getTime();
+    }
+    if (msg.created_at) {
+      return new Date(msg.created_at).getTime();
+    }
+    return 0;
+  };
+
+  const groupMessagesByContact = (): Contact[] => {
+    const contactsMap: { [key: string]: Contact } = {};
+
+    messages.forEach((msg) => {
+      const contactId = getContactId(msg);
+
+      if (!contactsMap[contactId]) {
+        contactsMap[contactId] = {
+          phoneNumber: contactId,
+          name: getContactName(msg),
+          lastMessage: '',
+          lastMessageTime: '',
+          unreadCount: 0,
+          messages: [],
+        };
+      }
+
+      contactsMap[contactId].messages.push(msg);
+    });
+
+    const contacts = Object.values(contactsMap).map((contact) => {
+      contact.messages.sort((a, b) => {
+        return getMessageTimestamp(a) - getMessageTimestamp(b);
+      });
+
+      const lastMsg = contact.messages[contact.messages.length - 1];
+      contact.lastMessage = lastMsg.message || 'Mensagem';
+
+      const lastMsgTime = getMessageTimestamp(lastMsg);
+      contact.lastMessageTime = lastMsgTime > 0 ? new Date(lastMsgTime).toISOString() : '';
+      contact.name = getContactName(lastMsg);
+
+      return contact;
+    });
+
+    contacts.sort((a, b) => {
+      const dateA = new Date(a.lastMessageTime).getTime();
+      const dateB = new Date(b.lastMessageTime).getTime();
+      return dateB - dateA;
+    });
+
+    return contacts;
+  };
+
+  const contacts = groupMessagesByContact();
+
+  const filteredContacts = contacts.filter((contact) => {
+    const searchLower = searchTerm.toLowerCase();
+    const displayPhone = getPhoneNumber(contact.phoneNumber);
+    return (
+      contact.name.toLowerCase().includes(searchLower) ||
+      displayPhone.toLowerCase().includes(searchLower) ||
+      contact.phoneNumber.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const selectedContactData = selectedContact
+    ? contacts.find((c) => c.phoneNumber === selectedContact)
+    : null;
+
+  useEffect(() => {
+    if (!selectedContact && contacts.length > 0) {
+      setSelectedContact(contacts[0].phoneNumber);
+    }
+  }, [contacts.length, selectedContact]);
+
+  const groupMessagesByDate = (msgs: Message[]) => {
+    const groups: { [key: string]: Message[] } = {};
+    msgs.forEach((msg) => {
+      const date = formatDate(msg.created_at);
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(msg);
+    });
+    return groups;
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando chat...</p>
+      <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando chat...</p>
+          </div>
         </div>
       </div>
     );
   }
 
+  const currentMessages = selectedContactData?.messages || [];
+  const messageGroups = groupMessagesByDate(currentMessages);
+
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <MessageCircle className="w-6 h-6 text-white" />
+    <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+      <div
+        className={`${
+          sidebarOpen ? 'flex' : 'hidden'
+        } md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
+      >
+        <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
+              <MessageCircle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">{attendant?.name}</h1>
-              <p className="text-sm text-gray-600">
-                {sector ? `Setor: ${sector.name}` : company?.name}
-              </p>
+              <h2 className="text-gray-900 font-bold text-base tracking-tight">{attendant?.name}</h2>
+              <p className="text-xs text-gray-500">{sector ? `Setor: ${sector.name}` : company?.name}</p>
             </div>
           </div>
           <button
-            onClick={() => signOut()}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+            onClick={signOut}
+            className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+            title="Sair"
           >
             <LogOut className="w-4 h-4" />
-            Sair
           </button>
-        </div>
-      </header>
+        </header>
 
-      <div className="flex-1 flex flex-col overflow-hidden max-w-6xl mx-auto w-full">
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <MessageCircle className="w-20 h-20 text-gray-300 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Nenhuma mensagem ainda
-              </h3>
-              <p className="text-gray-500">
-                As mensagens aparecerão aqui quando chegarem
+        <div className="px-5 py-4 bg-white/30 backdrop-blur-sm border-b border-gray-200/50">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Pesquisar contato"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white/60 text-gray-900 text-sm pl-12 pr-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all placeholder-gray-400"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto bg-transparent">
+          {filteredContacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full p-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4">
+                <MessageCircle className="w-10 h-10 text-blue-500" />
+              </div>
+              <p className="text-gray-500 text-sm text-center font-medium">
+                {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
               </p>
             </div>
           ) : (
-            messages.map((msg, index) => {
-              const showDate =
-                index === 0 ||
-                formatDate(messages[index - 1].created_at) !== formatDate(msg.created_at);
-
-              const isFromCustomer = msg.numero && msg.numero.trim() !== '';
-
-              return (
-                <div key={msg.id}>
-                  {showDate && (
-                    <div className="flex justify-center mb-4">
-                      <span className="px-4 py-1.5 bg-gray-200 rounded-full text-sm font-medium text-gray-700">
-                        {formatDate(msg.created_at)}
+            <div className="p-2 space-y-1">
+              {filteredContacts.map((contact) => (
+                <button
+                  key={contact.phoneNumber}
+                  onClick={() => {
+                    setSelectedContact(contact.phoneNumber);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
+                    selectedContact === contact.phoneNumber
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
+                      : 'hover:bg-white/40'
+                  }`}
+                >
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1 text-left overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
+                      <span className="text-xs text-gray-400 ml-2">
+                        {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
                       </span>
                     </div>
-                  )}
-                  <div className={`flex ${isFromCustomer ? 'justify-start' : 'justify-end'}`}>
-                    <div
-                      className={`max-w-2xl rounded-2xl p-4 shadow-md ${
-                        isFromCustomer
-                          ? 'bg-white border border-gray-200'
-                          : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
-                      }`}
-                    >
-                      {isFromCustomer && (
-                        <div className="mb-1">
-                          <span className="text-sm font-semibold text-blue-600">
-                            {msg.pushname || msg.numero}
-                          </span>
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
+                      {contact.unreadCount > 0 && (
+                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
+                          <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
                         </div>
                       )}
-                      {msg.tipomessage && msg.tipomessage !== 'text' && (
-                        <span
-                          className={`inline-block px-2 py-1 text-xs font-medium rounded mb-2 ${
-                            isFromCustomer
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-white/20 text-white'
-                          }`}
-                        >
-                          {msg.tipomessage}
-                        </span>
-                      )}
-                      <p className={`text-base break-words ${isFromCustomer ? 'text-gray-900' : 'text-white'}`}>
-                        {msg.message}
-                      </p>
-                      <span
-                        className={`text-xs mt-2 block ${
-                          isFromCustomer ? 'text-gray-500' : 'text-white/80'
-                        }`}
-                      >
-                        {formatTime(msg.timestamp, msg.created_at)}
-                      </span>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                </button>
+              ))}
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
+      </div>
 
-        <div className="bg-white border-t border-gray-200 p-4 shadow-lg">
-          <form onSubmit={handleSendMessage} className="flex gap-3 max-w-5xl mx-auto">
-            <input
-              type="text"
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="flex-1 px-5 py-3 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-            />
-            <button
-              type="submit"
-              disabled={!messageText.trim()}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
-            >
-              <Send className="w-5 h-5" />
-              Enviar
-            </button>
-          </form>
-        </div>
+      <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
+        {selectedContactData ? (
+          <>
+            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
+                  <User className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
+                  <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                </div>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto bg-transparent px-6 py-4">
+              <div className="max-w-5xl mx-auto">
+                {Object.entries(messageGroups).map(([date, msgs]) => (
+                  <div key={date} className="mb-6">
+                    <div className="flex justify-center mb-5">
+                      <div className="bg-white/60 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50">
+                        <p className="text-[11px] text-gray-600 font-semibold tracking-wide">{date}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {msgs.map((msg) => {
+                        const isSentMessage = msg['minha?'] === 'true';
+                        const isFromCustomer = msg.numero && msg.numero.trim() !== '';
+
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex ${isSentMessage || !isFromCustomer ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`max-w-[70%] rounded-2xl ${
+                                isSentMessage || !isFromCustomer
+                                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-lg'
+                                  : 'bg-white/80 backdrop-blur-sm text-gray-900 rounded-bl-md shadow-md border border-gray-200/50'
+                              }`}
+                            >
+                              {isFromCustomer && !isSentMessage && (
+                                <div className="px-3.5 pt-2">
+                                  <span className="text-sm font-semibold text-blue-600">
+                                    {msg.pushname || msg.numero}
+                                  </span>
+                                </div>
+                              )}
+                              {msg.tipomessage && msg.tipomessage !== 'text' && msg.tipomessage !== 'conversation' && (
+                                <span
+                                  className={`inline-block mx-3 mt-2 px-2 py-1 text-xs font-medium rounded ${
+                                    isSentMessage || !isFromCustomer
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-blue-100 text-blue-700'
+                                  }`}
+                                >
+                                  {msg.tipomessage}
+                                </span>
+                              )}
+                              {msg.message && (
+                                <div className="px-3.5 py-2">
+                                  <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">
+                                    {msg.message}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
+                                <span className={`text-[10px] ${isSentMessage || !isFromCustomer ? 'text-blue-100' : 'text-gray-400'}`}>
+                                  {formatTime(msg.timestamp, msg.created_at)}
+                                </span>
+                                {(isSentMessage || !isFromCustomer) && (
+                                  <CheckCheck className="w-3.5 h-3.5 text-blue-50" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
+              <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+                <div className="flex-1 bg-white/60 rounded-2xl flex items-center px-5 py-3 border border-gray-200/50 focus-within:border-blue-400 focus-within:bg-white transition-all">
+                  <input
+                    type="text"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder="Digite uma mensagem"
+                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!messageText.trim()}
+                  className="p-3.5 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  title="Enviar mensagem"
+                >
+                  <Send className="w-5 h-5 text-white" />
+                </button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-transparent">
+            <div className="text-center p-8">
+              <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-blue-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <MessageCircle className="w-16 h-16 text-blue-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-700 mb-3 tracking-tight">Nenhuma mensagem ainda</h3>
+              <p className="text-gray-500 text-sm">As mensagens aparecerão aqui quando chegarem</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
