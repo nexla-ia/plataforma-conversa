@@ -26,9 +26,12 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    console.log('===== CREATE ATTENDANT FUNCTION STARTED =====');
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("Authorization");
+
+    console.log('Headers:', { authHeader: authHeader ? 'present' : 'missing' });
 
     const { createClient } = await import("npm:@supabase/supabase-js@2");
 
@@ -40,9 +43,15 @@ Deno.serve(async (req: Request) => {
 
     const { data: { user: requestUser }, error: authError } = await supabaseClient.auth.getUser();
 
+    console.log('Auth check:', {
+      hasUser: !!requestUser,
+      userId: requestUser?.id,
+      authError: authError?.message
+    });
+
     if (authError || !requestUser) {
       return new Response(
-        JSON.stringify({ error: "Unauthorized - Invalid or missing token" }),
+        JSON.stringify({ error: "Unauthorized - Invalid or missing token", details: authError?.message }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
