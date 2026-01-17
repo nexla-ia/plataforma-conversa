@@ -82,9 +82,14 @@ Deno.serve(async (req: Request) => {
     const body: CreateAttendantRequest = await req.json();
     const { name, email, password, phone, api_key, department_id, sector_id, is_active } = body;
 
+    console.log('Received data:', { name, email, phone, api_key, department_id, sector_id, is_active });
+
     if (!name || !email || !password || !api_key) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: name, email, password, api_key" }),
+        JSON.stringify({
+          error: "Missing required fields: name, email, password, api_key",
+          received: { name: !!name, email: !!email, password: !!password, api_key: !!api_key }
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
