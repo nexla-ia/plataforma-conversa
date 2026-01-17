@@ -42,18 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [showGoodbye, setShowGoodbye] = useState(false);
 
   const fetchCompany = async (userId: string) => {
-    console.log('fetchCompany - userId:', userId);
     const { data: attendantData, error: attendantError } = await supabase
       .from('attendants')
       .select('*, companies(*)')
       .eq('user_id', userId)
       .maybeSingle();
 
-    console.log('fetchCompany - attendantData:', attendantData);
-    console.log('fetchCompany - attendantError:', attendantError);
-
     if (!attendantError && attendantData) {
-      console.log('Setting isAttendant to true');
       setAttendant(attendantData);
       setIsAttendant(true);
       if (attendantData.companies) {
