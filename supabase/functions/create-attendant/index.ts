@@ -98,9 +98,19 @@ Deno.serve(async (req: Request) => {
       .eq("api_key", api_key)
       .maybeSingle();
 
-    if (companyError || !targetCompany) {
+    if (companyError) {
       return new Response(
-        JSON.stringify({ error: "Empresa não encontrada com esta API key" }),
+        JSON.stringify({ error: "Erro ao buscar empresa", details: companyError.message }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!targetCompany) {
+      return new Response(
+        JSON.stringify({ error: "Empresa não encontrada com esta API key", api_key_received: api_key }),
         {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
