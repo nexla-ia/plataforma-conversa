@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, MoreVertical, X, Tag, Building2, Layers } from 'lucide-react';
+import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, Building2, Layers, ChevronDown } from 'lucide-react';
 
 interface Message {
   id?: number;
@@ -54,11 +54,7 @@ export default function AttendantDashboard() {
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-
-  useEffect(() => {
-    console.log('showOptionsMenu mudou para:', showOptionsMenu);
-  }, [showOptionsMenu]);
+  const [openDropdownContact, setOpenDropdownContact] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -66,6 +62,23 @@ export default function AttendantDashboard() {
   const [selectedSector, setSelectedSector] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (openDropdownContact && !target.closest('.dropdown-container')) {
+        setOpenDropdownContact(null);
+        setSelectedDepartment('');
+        setSelectedSector('');
+        setSelectedTag('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdownContact]);
 
   useEffect(() => {
     if (attendant && company) {
@@ -161,7 +174,7 @@ export default function AttendantDashboard() {
   };
 
   const handleUpdateContactInfo = async () => {
-    if (!selectedContact || !company?.api_key) return;
+    if (!openDropdownContact || !company?.api_key) return;
 
     try {
       const updates: any = {};
@@ -187,12 +200,12 @@ export default function AttendantDashboard() {
         .from('messages')
         .update(updates)
         .eq('apikey_instancia', company.api_key)
-        .eq('numero', selectedContact);
+        .eq('numero', openDropdownContact);
 
       if (error) throw error;
 
       alert('Informações atualizadas com sucesso!');
-      setShowOptionsMenu(false);
+      setOpenDropdownContact(null);
       setSelectedDepartment('');
       setSelectedSector('');
       setSelectedTag('');
@@ -524,40 +537,140 @@ export default function AttendantDashboard() {
           ) : (
             <div className="p-2 space-y-1">
               {filteredContacts.map((contact) => (
-                <button
-                  key={contact.phoneNumber}
-                  onClick={() => {
-                    setSelectedContact(contact.phoneNumber);
-                    if (window.innerWidth < 768) {
-                      setSidebarOpen(false);
-                    }
-                  }}
-                  className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
-                    selectedContact === contact.phoneNumber
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
-                      : 'hover:bg-white/40'
-                  }`}
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
-                    <User className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="flex-1 text-left overflow-hidden">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
-                      <span className="text-xs text-gray-400 ml-2">
-                        {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
-                      {contact.unreadCount > 0 && (
-                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
-                          <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
+                <div key={contact.phoneNumber} className="relative dropdown-container">
+                  <div
+                    className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
+                      selectedContact === contact.phoneNumber
+                        ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
+                        : 'hover:bg-white/40'
+                    }`}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedContact(contact.phoneNumber);
+                        if (window.innerWidth < 768) {
+                          setSidebarOpen(false);
+                        }
+                      }}
+                      className="flex items-center gap-3 flex-1 min-w-0"
+                    >
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
+                        <User className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1 text-left overflow-hidden">
+                        <div className="flex items-center justify-between mb-1">
+                          <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
+                          <span className="text-xs text-gray-400 ml-2">
+                            {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
+                          </span>
                         </div>
-                      )}
-                    </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
+                          {contact.unreadCount > 0 && (
+                            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
+                              <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenDropdownContact(
+                          openDropdownContact === contact.phoneNumber ? null : contact.phoneNumber
+                        );
+                      }}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
+                      title="Opções"
+                    >
+                      <ChevronDown className={`w-4 h-4 transition-transform ${
+                        openDropdownContact === contact.phoneNumber ? 'rotate-180' : ''
+                      }`} />
+                    </button>
                   </div>
-                </button>
+
+                  {openDropdownContact === contact.phoneNumber && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 space-y-3">
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+                          <Building2 className="w-3 h-3 text-blue-600" />
+                          Departamento
+                        </label>
+                        <select
+                          value={selectedDepartment}
+                          onChange={(e) => setSelectedDepartment(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
+                        >
+                          <option value="">Selecionar</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+                          <Layers className="w-3 h-3 text-blue-600" />
+                          Setor
+                        </label>
+                        <select
+                          value={selectedSector}
+                          onChange={(e) => setSelectedSector(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
+                        >
+                          <option value="">Selecionar</option>
+                          {sectors.map((sec) => (
+                            <option key={sec.id} value={sec.id}>
+                              {sec.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
+                          <Tag className="w-3 h-3 text-blue-600" />
+                          Tag
+                        </label>
+                        <select
+                          value={selectedTag}
+                          onChange={(e) => setSelectedTag(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
+                        >
+                          <option value="">Selecionar</option>
+                          {tags.map((tag) => (
+                            <option key={tag.id} value={tag.id}>
+                              {tag.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          onClick={() => {
+                            setOpenDropdownContact(null);
+                            setSelectedDepartment('');
+                            setSelectedSector('');
+                            setSelectedTag('');
+                          }}
+                          className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-all text-xs"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={handleUpdateContactInfo}
+                          className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all text-xs"
+                        >
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -567,32 +680,20 @@ export default function AttendantDashboard() {
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
         {selectedContactData ? (
           <>
-            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
-                  <User className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
-                  <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
-                </div>
-              </div>
+            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center gap-3 shadow-sm border-b border-gray-200/50">
               <button
-                onClick={() => {
-                  console.log('Clicou nos 3 pontinhos!');
-                  setShowOptionsMenu(true);
-                }}
-                className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
-                title="Mais opções"
+                onClick={() => setSidebarOpen(true)}
+                className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
               >
-                <MoreVertical className="w-5 h-5" />
+                <Menu className="w-5 h-5" />
               </button>
+              <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
+                <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+              </div>
             </header>
 
             <div className="flex-1 overflow-y-auto bg-transparent px-6 py-4">
@@ -699,115 +800,6 @@ export default function AttendantDashboard() {
           </div>
         )}
       </div>
-
-      {showOptionsMenu && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={(e) => {
-            console.log('Clicou no backdrop');
-            if (e.target === e.currentTarget) {
-              setShowOptionsMenu(false);
-            }
-          }}
-        >
-          {console.log('Renderizando modal!')}
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between rounded-t-3xl">
-              <h2 className="text-xl font-bold text-gray-900">Definir Informações</h2>
-              <button
-                onClick={() => {
-                  setShowOptionsMenu(false);
-                  setSelectedDepartment('');
-                  setSelectedSector('');
-                  setSelectedTag('');
-                }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  Departamento
-                </label>
-                <select
-                  value={selectedDepartment}
-                  onChange={(e) => setSelectedDepartment(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
-                >
-                  <option value="">Selecione um departamento</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <Layers className="w-4 h-4 text-blue-600" />
-                  Setor
-                </label>
-                <select
-                  value={selectedSector}
-                  onChange={(e) => setSelectedSector(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
-                >
-                  <option value="">Selecione um setor</option>
-                  {sectors.map((sec) => (
-                    <option key={sec.id} value={sec.id}>
-                      {sec.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <Tag className="w-4 h-4 text-blue-600" />
-                  Tag
-                </label>
-                <select
-                  value={selectedTag}
-                  onChange={(e) => setSelectedTag(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
-                >
-                  <option value="">Selecione uma tag</option>
-                  {tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    setSelectedDepartment('');
-                    setSelectedSector('');
-                    setSelectedTag('');
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleUpdateContactInfo}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
-                >
-                  Salvar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
