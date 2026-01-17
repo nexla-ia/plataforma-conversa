@@ -55,6 +55,10 @@ export default function AttendantDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+
+  useEffect(() => {
+    console.log('showOptionsMenu mudou para:', showOptionsMenu);
+  }, [showOptionsMenu]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
@@ -580,7 +584,10 @@ export default function AttendantDashboard() {
                 </div>
               </div>
               <button
-                onClick={() => setShowOptionsMenu(true)}
+                onClick={() => {
+                  console.log('Clicou nos 3 pontinhos!');
+                  setShowOptionsMenu(true);
+                }}
                 className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
                 title="Mais opções"
               >
@@ -694,7 +701,16 @@ export default function AttendantDashboard() {
       </div>
 
       {showOptionsMenu && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            console.log('Clicou no backdrop');
+            if (e.target === e.currentTarget) {
+              setShowOptionsMenu(false);
+            }
+          }}
+        >
+          {console.log('Renderizando modal!')}
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between rounded-t-3xl">
               <h2 className="text-xl font-bold text-gray-900">Definir Informações</h2>
