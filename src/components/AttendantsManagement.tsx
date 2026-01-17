@@ -144,7 +144,7 @@ export default function AttendantsManagement() {
             email: formData.email,
             password: formData.password,
             phone: formData.phone,
-            company_id: company.id,
+            api_key: company.api_key,
             department_id: formData.department_id || null,
             sector_id: formData.sector_id || null,
             is_active: formData.is_active,

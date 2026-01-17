@@ -11,7 +11,7 @@ interface CreateAttendantRequest {
   email: string;
   password: string;
   phone: string;
-  company_id: string;
+  api_key: string;
   department_id: string | null;
   sector_id: string | null;
   is_active: boolean;
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: company } = await supabaseAdmin
       .from("companies")
-      .select("id")
+      .select("id, api_key")
       .eq("user_id", requestUser.id)
       .maybeSingle();
 
@@ -80,11 +80,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const body: CreateAttendantRequest = await req.json();
-    const { name, email, password, phone, company_id, department_id, sector_id, is_active } = body;
+    const { name, email, password, phone, api_key, department_id, sector_id, is_active } = body;
 
-    if (!name || !email || !password || !company_id) {
+    if (!name || !email || !password || !api_key) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: name, email, password, company_id" }),
+        JSON.stringify({ error: "Missing required fields: name, email, password, api_key" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -92,7 +92,23 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (company && company.id !== company_id) {
+    const { data: targetCompany, error: companyError } = await supabaseAdmin
+      .from("companies")
+      .select("id, api_key")
+      .eq("api_key", api_key)
+      .maybeSingle();
+
+    if (companyError || !targetCompany) {
+      return new Response(
+        JSON.stringify({ error: "Empresa não encontrada com esta API key" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (company && company.api_key !== api_key) {
       return new Response(
         JSON.stringify({ error: "Company admins can only create attendants for their own company" }),
         {
@@ -122,24 +138,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data: companyData } = await supabaseAdmin
-      .from("companies")
-      .select("api_key")
-      .eq("id", company_id)
-      .single();
-
     const { data: attendant, error: insertError } = await supabaseAdmin
       .from("attendants")
       .insert({
         user_id: authUser.user.id,
-        company_id: company_id,
+        company_id: targetCompany.id,
         department_id: department_id || null,
         sector_id: sector_id || null,
         name: name,
         email: email.trim(),
         phone: phone || "",
         is_active: is_active !== undefined ? is_active : true,
-        api_key: companyData?.api_key || null,
+        api_key: api_key,
       })
       .select()
       .single();
