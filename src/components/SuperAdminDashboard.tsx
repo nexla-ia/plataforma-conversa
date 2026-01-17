@@ -24,6 +24,12 @@ type Message = {
   apikey_instancia: string;
   company_id: string | null;
   caption: string | null;
+  base64?: string | null;
+  urlimagem?: string | null;
+  urlpdf?: string | null;
+  mimetype?: string | null;
+  date_time?: string | null;
+  'minha?'?: string | null;
 };
 
 type TabType = "empresas" | "mensagens";
@@ -334,15 +340,14 @@ export default function SuperAdminDashboard() {
 
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!confirm(`Tem certeza que deseja deletar a empresa "${companyName}"? Esta ação não pode ser desfeita.`)) {
+    if (!confirm(`Tem certeza que deseja deletar a empresa "${companyName}"?\n\nIsto irá deletar PERMANENTEMENTE:\n• Todos os atendentes\n• Todos os departamentos\n• Todos os setores\n• Todas as tags\n• Todas as mensagens\n\nEsta ação não pode ser desfeita!`)) {
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('companies')
-        .delete()
-        .eq('id', companyId);
+      const { data, error } = await supabase.rpc('delete_company_cascade', {
+        company_uuid: companyId
+      });
 
       if (error) {
         console.error('Erro ao deletar empresa:', error);
@@ -350,7 +355,14 @@ export default function SuperAdminDashboard() {
         return;
       }
 
-      await loadCompanies();
+      if (data?.success) {
+        const deleted = data.deleted;
+        const deletionSummary = `Empresa "${companyName}" deletada com sucesso!\n\nItens removidos:\n• ${deleted.attendants} atendente(s)\n• ${deleted.departments} departamento(s)\n• ${deleted.sectors} setor(es)\n• ${deleted.tags} tag(s)\n• ${deleted.messages} mensagem(ns) recebida(s)\n• ${deleted.sent_messages} mensagem(ns) enviada(s)`;
+
+        alert(deletionSummary);
+        await loadCompanies();
+        await loadMessages();
+      }
     } catch (err: any) {
       console.error('Erro ao deletar empresa:', err);
       setErrorMsg('Erro ao deletar empresa: ' + err.message);
