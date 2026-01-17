@@ -357,7 +357,7 @@ export default function SuperAdminDashboard() {
 
       if (data?.success) {
         const deleted = data.deleted;
-        const deletionSummary = `Empresa "${companyName}" deletada com sucesso!\n\nItens removidos:\n• ${deleted.attendants} atendente(s)\n• ${deleted.departments} departamento(s)\n• ${deleted.sectors} setor(es)\n• ${deleted.tags} tag(s)\n• ${deleted.messages} mensagem(ns) recebida(s)\n• ${deleted.sent_messages} mensagem(ns) enviada(s)`;
+        const deletionSummary = `Empresa "${companyName}" deletada com sucesso!\n\nItens removidos:\n• ${deleted.attendants} atendente(s)\n• ${deleted.attendant_users} usuário(s) de atendente do Auth\n• ${deleted.departments} departamento(s)\n• ${deleted.sectors} setor(es)\n• ${deleted.tags} tag(s)\n• ${deleted.messages} mensagem(ns) recebida(s)\n• ${deleted.sent_messages} mensagem(ns) enviada(s)\n• ${deleted.company_user} usuário da empresa no Auth`;
 
         alert(deletionSummary);
         await loadCompanies();
