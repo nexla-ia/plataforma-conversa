@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trash2, Edit2, X, Loader2, UserCircle2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Loader2, UserCircle2, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Department {
@@ -43,6 +43,7 @@ export default function AttendantsManagement() {
     name: '',
     email: '',
     phone: '',
+    password: '',
     department_id: '',
     sector_id: '',
     is_active: true,
@@ -110,35 +111,57 @@ export default function AttendantsManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company?.id || !editingId) return;
+    if (!company?.id) return;
+
+    if (!editingId && !formData.password) {
+      alert('Senha é obrigatória para criar novo atendente');
+      return;
+    }
 
     setSaving(true);
     try {
-      const dataToSave = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        department_id: formData.department_id || null,
-        sector_id: formData.sector_id || null,
-        is_active: formData.is_active,
-        updated_at: new Date().toISOString(),
-      };
+      if (editingId) {
+        const dataToSave = {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          department_id: formData.department_id || null,
+          sector_id: formData.sector_id || null,
+          is_active: formData.is_active,
+          updated_at: new Date().toISOString(),
+        };
 
-      const { error } = await supabase
-        .from('attendants')
-        .update(dataToSave)
-        .eq('id', editingId);
+        const { error } = await supabase
+          .from('attendants')
+          .update(dataToSave)
+          .eq('id', editingId);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.functions.invoke('create-attendant', {
+          body: {
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            phone: formData.phone,
+            company_id: company.id,
+            department_id: formData.department_id || null,
+            sector_id: formData.sector_id || null,
+            is_active: formData.is_active,
+          },
+        });
 
-      setFormData({ name: '', email: '', phone: '', department_id: '', sector_id: '', is_active: true });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+      }
+
+      setFormData({ name: '', email: '', phone: '', password: '', department_id: '', sector_id: '', is_active: true });
       setShowForm(false);
       setEditingId(null);
       fetchData();
     } catch (error: any) {
       console.error('Erro ao salvar atendente:', error);
-      const errorMsg = error.message || 'Erro ao salvar atendente';
-      alert(`Erro: ${errorMsg}`);
+      alert(`Erro: ${error.message || 'Erro ao salvar atendente'}`);
     } finally {
       setSaving(false);
     }
@@ -149,6 +172,7 @@ export default function AttendantsManagement() {
       name: attendant.name,
       email: attendant.email,
       phone: attendant.phone,
+      password: '',
       department_id: attendant.department_id || '',
       sector_id: attendant.sector_id || '',
       is_active: attendant.is_active,
@@ -177,7 +201,7 @@ export default function AttendantsManagement() {
   };
 
   const handleCancel = () => {
-    setFormData({ name: '', email: '', phone: '', department_id: '', sector_id: '', is_active: true });
+    setFormData({ name: '', email: '', phone: '', password: '', department_id: '', sector_id: '', is_active: true });
     setShowForm(false);
     setEditingId(null);
   };
@@ -215,16 +239,27 @@ export default function AttendantsManagement() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Atendentes</h2>
-        <p className="text-sm text-gray-500 mt-1">Gerencie os atendentes da sua empresa</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Atendentes</h2>
+          <p className="text-sm text-gray-500 mt-1">Gerencie os atendentes da sua empresa</p>
+        </div>
+        {!showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 transition-all shadow-md"
+          >
+            <Plus className="w-5 h-5" />
+            Novo Atendente
+          </button>
+        )}
       </div>
 
       {showForm && (
         <div className="bg-white/70 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 mb-6 shadow-md">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
-              Editar Atendente
+              {editingId ? 'Editar Atendente' : 'Novo Atendente'}
             </h3>
             <button
               onClick={handleCancel}
@@ -265,6 +300,24 @@ export default function AttendantsManagement() {
                 />
               </div>
             </div>
+
+            {!editingId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Senha de acesso"
+                  minLength={6}
+                  className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mínimo de 6 caracteres</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -346,7 +399,7 @@ export default function AttendantsManagement() {
                     Salvando...
                   </span>
                 ) : (
-                  'Atualizar'
+                  editingId ? 'Atualizar' : 'Criar Atendente'
                 )}
               </button>
               <button
@@ -367,7 +420,7 @@ export default function AttendantsManagement() {
             <UserCircle2 className="w-10 h-10 text-blue-500" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum atendente cadastrado</h3>
-          <p className="text-sm text-gray-500">Os atendentes cadastrados aparecerão aqui</p>
+          <p className="text-sm text-gray-500">Clique em "Novo Atendente" para adicionar o primeiro atendente</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
