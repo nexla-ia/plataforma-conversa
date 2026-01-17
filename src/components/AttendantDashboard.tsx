@@ -36,6 +36,8 @@ export default function AttendantDashboard() {
     if (attendant && company) {
       fetchMessages();
       subscribeToMessages();
+    } else {
+      setLoading(false);
     }
   }, [attendant, company]);
 
@@ -48,7 +50,10 @@ export default function AttendantDashboard() {
   };
 
   const fetchMessages = async () => {
-    if (!company?.api_key) return;
+    if (!company?.api_key) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
