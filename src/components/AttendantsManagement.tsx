@@ -22,6 +22,7 @@ interface Attendant {
   name: string;
   email: string;
   phone: string;
+  function: string;
   is_active: boolean;
   created_at: string;
   department?: Department;
@@ -43,6 +44,7 @@ export default function AttendantsManagement() {
     name: '',
     email: '',
     phone: '',
+    function: '',
     password: '',
     department_id: '',
     sector_id: '',
@@ -125,6 +127,7 @@ export default function AttendantsManagement() {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
+          function: formData.function,
           department_id: formData.department_id || null,
           sector_id: formData.sector_id || null,
           is_active: formData.is_active,
@@ -144,6 +147,7 @@ export default function AttendantsManagement() {
             email: formData.email,
             password: formData.password,
             phone: formData.phone,
+            function: formData.function,
             api_key: company.api_key,
             department_id: formData.department_id || null,
             sector_id: formData.sector_id || null,
@@ -155,7 +159,7 @@ export default function AttendantsManagement() {
         if (data?.error) throw new Error(data.error);
       }
 
-      setFormData({ name: '', email: '', phone: '', password: '', department_id: '', sector_id: '', is_active: true });
+      setFormData({ name: '', email: '', phone: '', function: '', password: '', department_id: '', sector_id: '', is_active: true });
       setShowForm(false);
       setEditingId(null);
       fetchData();
@@ -172,6 +176,7 @@ export default function AttendantsManagement() {
       name: attendant.name,
       email: attendant.email,
       phone: attendant.phone,
+      function: attendant.function || '',
       password: '',
       department_id: attendant.department_id || '',
       sector_id: attendant.sector_id || '',
@@ -319,18 +324,33 @@ export default function AttendantsManagement() {
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone
-              </label>
-              <input
-                type="text"
-                value={formData.phone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-                className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Telefone
+                </label>
+                <input
+                  type="text"
+                  value={formData.phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder="(00) 00000-0000"
+                  maxLength={15}
+                  className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Função
+                </label>
+                <input
+                  type="text"
+                  value={formData.function}
+                  onChange={(e) => setFormData({ ...formData, function: e.target.value })}
+                  placeholder="Ex: Vendedor, Suporte, Gerente"
+                  className="w-full px-4 py-2.5 bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

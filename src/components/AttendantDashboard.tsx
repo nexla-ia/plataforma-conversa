@@ -540,14 +540,26 @@ export default function AttendantDashboard() {
       try {
         const timestamp = new Date().toISOString();
 
+        // Formatar mensagem quando for atendente: (Função) - (Nome)\nMensagem
+        let formattedMessage = messageData.message || '';
+        if (attendant && attendant.function && messageData.tipomessage === 'conversation') {
+          formattedMessage = `(${attendant.function}) - ${attendant.name}\n${formattedMessage}`;
+        }
+
+        // Formatar caption para imagens/documentos quando for atendente
+        let formattedCaption = messageData.caption || null;
+        if (attendant && attendant.function && formattedCaption && messageData.tipomessage !== 'conversation') {
+          formattedCaption = `(${attendant.function}) - ${attendant.name}\n${formattedCaption}`;
+        }
+
         const webhookPayload = {
           numero: selectedContact,
-          message: messageData.message || '',
+          message: formattedMessage,
           tipomessage: messageData.tipomessage || 'conversation',
           base64: messageData.base64 || null,
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
-          caption: messageData.caption || null,
+          caption: formattedCaption,
           idmessage: generatedIdMessage,
           pushname: attendant?.name || company.name,
           timestamp: timestamp,

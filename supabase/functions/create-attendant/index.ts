@@ -11,6 +11,7 @@ interface CreateAttendantRequest {
   email: string;
   password: string;
   phone: string;
+  function: string;
   api_key: string;
   department_id: string | null;
   sector_id: string | null;
@@ -102,9 +103,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const body: CreateAttendantRequest = await req.json();
-    const { name, email, password, phone, api_key, department_id, sector_id, is_active } = body;
+    const { name, email, password, phone, function: attendantFunction, api_key, department_id, sector_id, is_active } = body;
 
-    console.log('Received data:', { name, email, phone, api_key, department_id, sector_id, is_active });
+    console.log('Received data:', { name, email, phone, function: attendantFunction, api_key, department_id, sector_id, is_active });
 
     if (!name || !email || !password || !api_key) {
       return new Response(
@@ -185,6 +186,7 @@ Deno.serve(async (req: Request) => {
         name: name,
         email: email.trim(),
         phone: phone || "",
+        function: attendantFunction || "",
         is_active: is_active !== undefined ? is_active : true,
         api_key: api_key,
       })

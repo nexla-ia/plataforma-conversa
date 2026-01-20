@@ -10,6 +10,7 @@ interface Attendant {
   name: string;
   email: string;
   phone: string;
+  function: string;
   is_active: boolean;
   user_id: string;
 }
