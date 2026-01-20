@@ -81,8 +81,6 @@ export default function AttendantDashboard() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
-  const [selectedSector, setSelectedSector] = useState<string>('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -93,8 +91,6 @@ export default function AttendantDashboard() {
       const target = event.target as HTMLElement;
       if (openDropdownContact && !target.closest('.dropdown-container')) {
         setOpenDropdownContact(null);
-        setSelectedDepartment('');
-        setSelectedSector('');
         setSelectedTags([]);
       }
     };
@@ -277,19 +273,9 @@ export default function AttendantDashboard() {
   };
 
   const handleUpdateContactInfo = async () => {
-    if (!openDropdownContact || !company?.api_key || !company?.id) return;
+    if (!openDropdownContact || !company?.id) return;
 
     try {
-      const updates: any = {};
-
-      if (selectedDepartment) {
-        updates.department_id = selectedDepartment;
-      }
-
-      if (selectedSector) {
-        updates.sector_id = selectedSector;
-      }
-
       // Buscar tags atuais do contato para verificar se houve mudança
       const currentContact = contactsDB.find(c => c.phone_number === openDropdownContact);
       const currentTags = currentContact?.tag_ids || [];
@@ -298,7 +284,7 @@ export default function AttendantDashboard() {
         selectedTags.length !== currentTags.length ||
         !selectedTags.every(tag => currentTags.includes(tag));
 
-      if (Object.keys(updates).length === 0 && !tagsChanged) {
+      if (!tagsChanged) {
         setToastMessage('Nenhuma alteração foi feita');
         setShowToast(true);
         return;
@@ -318,17 +304,6 @@ export default function AttendantDashboard() {
 
       const contactId = contactData.id;
 
-      // Atualizar a tabela contacts
-      if (Object.keys(updates).length > 0) {
-        const { error: contactError } = await supabase
-          .from('contacts')
-          .update(updates)
-          .eq('id', contactId);
-
-        if (contactError) throw contactError;
-      }
-
-      // Atualizar as tags do contato (sempre, mesmo se for vazio para permitir remoção)
       // Remover tags antigas
       await supabase
         .from('contact_tags')
@@ -349,33 +324,14 @@ export default function AttendantDashboard() {
         if (tagsError) throw tagsError;
       }
 
-      // Atualizar ambas as tabelas: messages e sent_messages
-      if (Object.keys(updates).length > 0) {
-        await Promise.all([
-          supabase
-            .from('messages')
-            .update(updates)
-            .eq('apikey_instancia', company.api_key)
-            .eq('numero', openDropdownContact),
-          supabase
-            .from('sent_messages')
-            .update(updates)
-            .eq('apikey_instancia', company.api_key)
-            .eq('numero', openDropdownContact)
-        ]);
-      }
-
-      setToastMessage('Informações atualizadas com sucesso!');
+      setToastMessage('Tags atualizadas com sucesso!');
       setShowToast(true);
       setOpenDropdownContact(null);
-      setSelectedDepartment('');
-      setSelectedSector('');
       setSelectedTags([]);
-      fetchMessages();
       fetchContacts();
     } catch (error) {
-      console.error('Erro ao atualizar informações:', error);
-      setToastMessage('Erro ao atualizar informações');
+      console.error('Erro ao atualizar tags:', error);
+      setToastMessage('Erro ao atualizar tags');
       setShowToast(true);
     }
   };
@@ -854,19 +810,15 @@ export default function AttendantDashboard() {
                         e.stopPropagation();
                         if (openDropdownContact === contact.phoneNumber) {
                           setOpenDropdownContact(null);
-                          setSelectedDepartment('');
-                          setSelectedSector('');
                           setSelectedTags([]);
                         } else {
                           setOpenDropdownContact(contact.phoneNumber);
-                          // Carregar informações atuais do contato
-                          setSelectedDepartment(contact.department_id || '');
-                          setSelectedSector(contact.sector_id || '');
+                          // Carregar tags atuais do contato
                           setSelectedTags(contact.tag_ids || []);
                         }
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
-                      title="Opções"
+                      title="Adicionar tags"
                     >
                       <ChevronDown className={`w-4 h-4 transition-transform ${
                         openDropdownContact === contact.phoneNumber ? 'rotate-180' : ''
@@ -875,51 +827,13 @@ export default function AttendantDashboard() {
                   </div>
 
                   {openDropdownContact === contact.phoneNumber && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50 space-y-3">
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
-                          <Building2 className="w-3 h-3 text-blue-600" />
-                          Departamento
-                        </label>
-                        <select
-                          value={selectedDepartment}
-                          onChange={(e) => setSelectedDepartment(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
-                        >
-                          <option value="">Selecionar</option>
-                          {departments.map((dept) => (
-                            <option key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
-                          <Layers className="w-3 h-3 text-blue-600" />
-                          Setor
-                        </label>
-                        <select
-                          value={selectedSector}
-                          onChange={(e) => setSelectedSector(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
-                        >
-                          <option value="">Selecionar</option>
-                          {sectors.map((sec) => (
-                            <option key={sec.id} value={sec.id}>
-                              {sec.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50">
+                      <div className="mb-3">
                         <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
                           <Tag className="w-3 h-3 text-blue-600" />
                           Tags (máx. 5)
                         </label>
-                        <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-2">
+                        <div className="space-y-2 max-h-48 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-2">
                           {tags.length === 0 ? (
                             <p className="text-xs text-gray-500 text-center py-2">Nenhuma tag disponível</p>
                           ) : (
@@ -959,12 +873,10 @@ export default function AttendantDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => {
                             setOpenDropdownContact(null);
-                            setSelectedDepartment('');
-                            setSelectedSector('');
                             setSelectedTags([]);
                           }}
                           className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-all text-xs"
