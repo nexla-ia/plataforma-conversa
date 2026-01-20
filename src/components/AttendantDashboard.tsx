@@ -167,14 +167,12 @@ export default function AttendantDashboard() {
       let filteredContacts = data;
       if (attendant?.department_id || attendant?.sector_id) {
         filteredContacts = data.filter((contact) => {
-          // Verifica departamento: null OU igual ao do atendente
+          // Se o atendente tem departamento, o contato DEVE ter o mesmo departamento
           const deptMatch = !attendant?.department_id ||
-                           !contact.department_id ||
                            contact.department_id === attendant.department_id;
 
-          // Verifica setor: null OU igual ao do atendente
+          // Se o atendente tem setor, o contato DEVE ter o mesmo setor
           const sectorMatch = !attendant?.sector_id ||
-                             !contact.sector_id ||
                              contact.sector_id === attendant.sector_id;
 
           // Deve satisfazer AMBAS as condições
@@ -449,14 +447,12 @@ export default function AttendantDashboard() {
       if (attendant?.department_id || attendant?.sector_id) {
         const beforeFilter = allMessages.length;
         allMessages = allMessages.filter((msg) => {
-          // Verifica departamento: null OU igual ao do atendente
+          // Se o atendente tem departamento, a mensagem DEVE ter o mesmo departamento
           const deptMatch = !attendant?.department_id ||
-                           !msg.department_id ||
                            msg.department_id === attendant.department_id;
 
-          // Verifica setor: null OU igual ao do atendente
+          // Se o atendente tem setor, a mensagem DEVE ter o mesmo setor
           const sectorMatch = !attendant?.sector_id ||
-                             !msg.sector_id ||
                              msg.sector_id === attendant.sector_id;
 
           // Deve satisfazer AMBAS as condições
@@ -547,6 +543,7 @@ export default function AttendantDashboard() {
       message: messageText.trim(),
       timestamp: Date.now().toString(),
       apikey_instancia: company.api_key,
+      department_id: attendant?.department_id || undefined,
       sector_id: attendant?.sector_id || undefined,
       date_time: new Date().toISOString(),
       'minha?': 'true',
