@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, Building2, Layers, ChevronDown, Briefcase } from 'lucide-react';
+import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, MoreVertical, X, Image as ImageIcon, Paperclip, FileText, Loader2 } from 'lucide-react';
 import Toast from './Toast';
 
 interface Message {
@@ -77,29 +77,20 @@ export default function AttendantDashboard() {
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [openDropdownContact, setOpenDropdownContact] = useState<string | null>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [showTagsModal, setShowTagsModal] = useState(false);
+  const [modalContactPhone, setModalContactPhone] = useState<string | null>(null);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [imageCaption, setImageCaption] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (openDropdownContact && !target.closest('.dropdown-container')) {
-        setOpenDropdownContact(null);
-        setSelectedTags([]);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openDropdownContact]);
 
   useEffect(() => {
     console.log('=== USEEFFECT PRINCIPAL ===');
@@ -273,11 +264,11 @@ export default function AttendantDashboard() {
   };
 
   const handleUpdateContactInfo = async () => {
-    if (!openDropdownContact || !company?.id) return;
+    if (!modalContactPhone || !company?.id) return;
 
     try {
       // Buscar tags atuais do contato para verificar se houve mudança
-      const currentContact = contactsDB.find(c => c.phone_number === openDropdownContact);
+      const currentContact = contactsDB.find(c => c.phone_number === modalContactPhone);
       const currentTags = currentContact?.tag_ids || [];
 
       const tagsChanged =
@@ -295,7 +286,7 @@ export default function AttendantDashboard() {
         .from('contacts')
         .select('id')
         .eq('company_id', company.id)
-        .eq('phone_number', openDropdownContact)
+        .eq('phone_number', modalContactPhone)
         .maybeSingle();
 
       if (!contactData) {
@@ -326,7 +317,8 @@ export default function AttendantDashboard() {
 
       setToastMessage('Tags atualizadas com sucesso!');
       setShowToast(true);
-      setOpenDropdownContact(null);
+      setShowTagsModal(false);
+      setModalContactPhone(null);
       setSelectedTags([]);
       fetchContacts();
     } catch (error) {
@@ -487,34 +479,179 @@ export default function AttendantDashboard() {
     };
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageText.trim() || !company?.api_key || !selectedContact) return;
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        resolve(base64.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
-    const newMessage: Partial<Message> = {
-      numero: selectedContact,
-      sender: selectedContact,
-      pushname: attendant?.name || null,
-      tipomessage: 'conversation',
-      message: messageText.trim(),
-      timestamp: Date.now().toString(),
-      apikey_instancia: company.api_key,
-      department_id: attendant?.department_id || undefined,
-      sector_id: attendant?.sector_id || undefined,
-      date_time: new Date().toISOString(),
-      'minha?': 'true',
-    };
+  const sendMessage = async (messageData: Partial<Message>) => {
+    if (!company || !selectedContact) return;
 
+    setSending(true);
     try {
-      const { error } = await supabase.from('sent_messages').insert([newMessage]);
+      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      if (error) throw error;
+      const { data: existingMessages } = await supabase
+        .from('messages')
+        .select('instancia, department_id, sector_id, tag_id')
+        .eq('numero', selectedContact)
+        .eq('apikey_instancia', company.api_key)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const instanciaValue = existingMessages?.[0]?.instancia || company.name;
+      const departmentId = existingMessages?.[0]?.department_id || attendant?.department_id || null;
+      const sectorId = existingMessages?.[0]?.sector_id || attendant?.sector_id || null;
+      const tagId = existingMessages?.[0]?.tag_id || null;
+
+      const newMessage = {
+        numero: selectedContact,
+        sender: selectedContact,
+        'minha?': 'true',
+        pushname: attendant?.name || company.name,
+        apikey_instancia: company.api_key,
+        date_time: new Date().toISOString(),
+        instancia: instanciaValue,
+        idmessage: generatedIdMessage,
+        company_id: company.id,
+        department_id: departmentId,
+        sector_id: sectorId,
+        tag_id: tagId,
+        ...messageData,
+      };
+
+      const { error } = await supabase
+        .from('sent_messages')
+        .insert([newMessage]);
+
+      if (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        alert('Erro ao enviar mensagem');
+        return;
+      }
+
+      try {
+        const timestamp = new Date().toISOString();
+
+        const webhookPayload = {
+          numero: selectedContact,
+          message: messageData.message || '',
+          tipomessage: messageData.tipomessage || 'conversation',
+          base64: messageData.base64 || null,
+          urlimagem: messageData.urlimagem || null,
+          urlpdf: messageData.urlpdf || null,
+          caption: messageData.caption || null,
+          idmessage: generatedIdMessage,
+          pushname: attendant?.name || company.name,
+          timestamp: timestamp,
+          instancia: instanciaValue,
+          apikey_instancia: company.api_key,
+        };
+
+        const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(webhookPayload),
+        });
+
+        if (!webhookResponse.ok) {
+          console.error('Erro ao enviar para webhook:', webhookResponse.status);
+        }
+      } catch (webhookError) {
+        console.error('Erro ao chamar webhook:', webhookError);
+      }
+
       setMessageText('');
       setTimeout(scrollToBottom, 100);
-    } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+    } catch (err) {
+      console.error('Erro ao enviar mensagem:', err);
       alert('Erro ao enviar mensagem');
+    } finally {
+      setSending(false);
     }
+  };
+
+  const handleSendMessage = async () => {
+    if (sending) return;
+    if (!messageText.trim() && !selectedFile) return;
+
+    setSending(true);
+    try {
+      if (selectedFile) {
+        const base64 = await fileToBase64(selectedFile);
+        const isImage = selectedFile.type.startsWith('image/');
+        const isAudio = selectedFile.type.startsWith('audio/');
+
+        const messageData: Partial<Message> = {
+          tipomessage: isImage ? 'imageMessage' : isAudio ? 'audioMessage' : 'documentMessage',
+          mimetype: selectedFile.type,
+          base64: base64,
+        };
+
+        if (isImage) {
+          messageData.message = imageCaption || messageText.trim() || 'Imagem';
+          if (imageCaption) {
+            messageData.caption = imageCaption;
+          }
+        } else if (isAudio) {
+          messageData.message = messageText.trim() || 'Áudio';
+        } else {
+          messageData.message = messageText.trim() || selectedFile.name;
+        }
+
+        await sendMessage(messageData);
+        setSelectedFile(null);
+        setFilePreview(null);
+        setImageCaption('');
+      } else {
+        await sendMessage({
+          message: messageText.trim(),
+          tipomessage: 'conversation',
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao enviar:', err);
+      alert('Erro ao enviar mensagem');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setFilePreview(null);
+    }
+    e.target.value = '';
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    setImageCaption('');
   };
 
   const formatTime = (timestamp: string | null, created_at: string) => {
@@ -768,131 +905,57 @@ export default function AttendantDashboard() {
           ) : (
             <div className="p-2 space-y-1">
               {filteredContacts.map((contact) => (
-                <div key={contact.phoneNumber} className="relative dropdown-container">
-                  <div
-                    className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
-                      selectedContact === contact.phoneNumber
-                        ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
-                        : 'hover:bg-white/40'
-                    }`}
-                  >
-                    <button
-                      onClick={() => {
-                        setSelectedContact(contact.phoneNumber);
-                        if (window.innerWidth < 768) {
-                          setSidebarOpen(false);
-                        }
-                      }}
-                      className="flex items-center gap-3 flex-1 min-w-0"
-                    >
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
-                        <User className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="flex-1 text-left overflow-hidden">
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
-                          <span className="text-xs text-gray-400 ml-2">
-                            {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
-                          {contact.unreadCount > 0 && (
-                            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
-                              <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (openDropdownContact === contact.phoneNumber) {
-                          setOpenDropdownContact(null);
-                          setSelectedTags([]);
-                        } else {
-                          setOpenDropdownContact(contact.phoneNumber);
-                          // Carregar tags atuais do contato
-                          setSelectedTags(contact.tag_ids || []);
-                        }
-                      }}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
-                      title="Adicionar tags"
-                    >
-                      <ChevronDown className={`w-4 h-4 transition-transform ${
-                        openDropdownContact === contact.phoneNumber ? 'rotate-180' : ''
-                      }`} />
-                    </button>
+                <button
+                  key={contact.phoneNumber}
+                  onClick={() => {
+                    setSelectedContact(contact.phoneNumber);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
+                    selectedContact === contact.phoneNumber
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
+                      : 'hover:bg-white/40'
+                  }`}
+                >
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
+                    <User className="w-6 h-6 text-white" />
                   </div>
-
-                  {openDropdownContact === contact.phoneNumber && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 p-4 z-50">
-                      <div className="mb-3">
-                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
-                          <Tag className="w-3 h-3 text-blue-600" />
-                          Tags (máx. 5)
-                        </label>
-                        <div className="space-y-2 max-h-48 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-2">
-                          {tags.length === 0 ? (
-                            <p className="text-xs text-gray-500 text-center py-2">Nenhuma tag disponível</p>
-                          ) : (
-                            tags.map((tag) => (
-                              <label
-                                key={tag.id}
-                                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedTags.includes(tag.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      if (selectedTags.length < 5) {
-                                        setSelectedTags([...selectedTags, tag.id]);
-                                      } else {
-                                        setToastMessage('Você pode selecionar no máximo 5 tags');
-                                        setShowToast(true);
-                                      }
-                                    } else {
-                                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
-                                    }
-                                  }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                  disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
-                                />
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-white flex-1"
-                                  style={{ backgroundColor: tag.color }}
-                                >
-                                  <Tag className="w-3 h-3" />
-                                  {tag.name}
-                                </span>
-                              </label>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setOpenDropdownContact(null);
-                            setSelectedTags([]);
-                          }}
-                          className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-all text-xs"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          onClick={handleUpdateContactInfo}
-                          className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all text-xs"
-                        >
-                          Salvar
-                        </button>
-                      </div>
+                  <div className="flex-1 text-left overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
+                      <span className="text-xs text-gray-400 ml-2">
+                        {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
+                      {contact.unreadCount > 0 && (
+                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
+                          <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
+                        </div>
+                      )}
+                    </div>
+                    {contact.tag_ids && contact.tag_ids.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {contact.tag_ids.map((tagId) => {
+                          const tag = tags.find(t => t.id === tagId);
+                          return tag ? (
+                            <span
+                              key={tagId}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              <Tag className="w-2.5 h-2.5" />
+                              {tag.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </button>
               ))}
             </div>
           )}
@@ -902,51 +965,53 @@ export default function AttendantDashboard() {
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
         {selectedContactData ? (
           <>
-            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center gap-3 shadow-sm border-b border-gray-200/50">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
-                <p className="text-gray-500 text-xs mb-1">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
-                <div className="flex flex-wrap gap-2">
-                  {selectedContactData.department_id && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                      <Briefcase className="w-3 h-3" />
-                      {departments.find(d => d.id === selectedContactData.department_id)?.name || 'Departamento'}
-                    </span>
-                  )}
-                  {selectedContactData.sector_id && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">
-                      <Layers className="w-3 h-3" />
-                      {sectors.find(s => s.id === selectedContactData.sector_id)?.name || 'Setor'}
-                    </span>
-                  )}
-                  {selectedContactData.tag_ids && selectedContactData.tag_ids.length > 0 && (
-                    <>
-                      {selectedContactData.tag_ids.map((tagId) => {
-                        const tag = tags.find(t => t.id === tagId);
-                        return tag ? (
-                          <span
-                            key={tagId}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                            style={{ backgroundColor: tag.color }}
-                          >
-                            <Tag className="w-3 h-3" />
-                            {tag.name}
-                          </span>
-                        ) : null;
-                      })}
-                    </>
-                  )}
+            <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
+              <div className="flex items-center gap-3 flex-1">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
+                  <User className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
+                  <p className="text-gray-500 text-xs mb-1">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedContactData.tag_ids && selectedContactData.tag_ids.length > 0 && (
+                      <>
+                        {selectedContactData.tag_ids.map((tagId) => {
+                          const tag = tags.find(t => t.id === tagId);
+                          return tag ? (
+                            <span
+                              key={tagId}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              <Tag className="w-3 h-3" />
+                              {tag.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
+                  setSelectedTags(currentContact?.tag_ids || []);
+                  setModalContactPhone(selectedContact);
+                  setShowTagsModal(true);
+                }}
+                className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                title="Adicionar tags"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
             </header>
 
             <div className="flex-1 overflow-y-auto bg-transparent px-6 py-4">
@@ -1020,25 +1085,117 @@ export default function AttendantDashboard() {
             </div>
 
             <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
-              <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+              {filePreview && (
+                <div className="mb-3 px-4 py-3 bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <img src={filePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-600 mb-1 font-medium">Imagem selecionada</p>
+                      <p className="text-xs text-gray-600">{selectedFile?.name}</p>
+                      <button
+                        onClick={clearSelectedFile}
+                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
+                      >
+                        Remover imagem
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedFile && selectedFile.type.startsWith('image/') && (
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    value={imageCaption}
+                    onChange={(e) => setImageCaption(e.target.value)}
+                    placeholder="Legenda para imagem (opcional)"
+                    className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all placeholder-gray-400"
+                  />
+                </div>
+              )}
+
+              {selectedFile && !selectedFile.type.startsWith('image/') && (
+                <div className="mb-3 px-4 py-3 bg-gray-50/80 backdrop-blur-sm border border-gray-200/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-8 h-8 text-gray-400" />
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-600 mb-1 font-medium">Arquivo selecionado</p>
+                      <p className="text-xs text-gray-600">{selectedFile?.name}</p>
+                      <button
+                        onClick={clearSelectedFile}
+                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
+                      >
+                        Remover arquivo
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={sending || !!selectedFile}
+                  className="p-3 text-gray-400 hover:text-blue-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
+                  title="Enviar imagem"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || !!selectedFile}
+                  className="p-3 text-gray-400 hover:text-blue-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
+                  title="Enviar arquivo"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+
                 <div className="flex-1 bg-white/60 rounded-2xl flex items-center px-5 py-3 border border-gray-200/50 focus-within:border-blue-400 focus-within:bg-white transition-all">
                   <input
                     type="text"
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                     placeholder="Digite uma mensagem"
-                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none text-sm"
+                    disabled={sending}
+                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                   />
                 </div>
+
                 <button
-                  type="submit"
-                  disabled={!messageText.trim()}
+                  onClick={handleSendMessage}
+                  disabled={(!messageText.trim() && !selectedFile) || sending}
                   className="p-3.5 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                   title="Enviar mensagem"
                 >
-                  <Send className="w-5 h-5 text-white" />
+                  {sending ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5 text-white" />
+                  )}
                 </button>
-              </form>
+              </div>
             </div>
           </>
         ) : (
@@ -1053,6 +1210,99 @@ export default function AttendantDashboard() {
           </div>
         )}
       </div>
+
+      {showTagsModal && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowTagsModal(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative z-[101]">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between rounded-t-3xl">
+              <h2 className="text-xl font-bold text-gray-900">Adicionar Tags</h2>
+              <button
+                onClick={() => {
+                  setShowTagsModal(false);
+                  setModalContactPhone(null);
+                  setSelectedTags([]);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Tag className="w-4 h-4 text-blue-600" />
+                  Tags (máx. 5)
+                </label>
+                <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  {tags.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-3">Nenhuma tag disponível</p>
+                  ) : (
+                    tags.map((tag) => (
+                      <label
+                        key={tag.id}
+                        className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTags.includes(tag.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              if (selectedTags.length < 5) {
+                                setSelectedTags([...selectedTags, tag.id]);
+                              } else {
+                                setToastMessage('Você pode selecionar no máximo 5 tags');
+                                setShowToast(true);
+                              }
+                            } else {
+                              setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                            }
+                          }}
+                          className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
+                        />
+                        <span
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white flex-1"
+                          style={{ backgroundColor: tag.color }}
+                        >
+                          <Tag className="w-4 h-4" />
+                          {tag.name}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-6">
+                <button
+                  onClick={() => {
+                    setShowTagsModal(false);
+                    setModalContactPhone(null);
+                    setSelectedTags([]);
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateContactInfo}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
