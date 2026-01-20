@@ -15,6 +15,25 @@ interface Contact {
   lastMessageTime: string;
   unreadCount: number;
   messages: Message[];
+  department_id?: string;
+  sector_id?: string;
+  tag_ids?: string[];
+  contact_db_id?: string;
+}
+
+interface ContactDB {
+  id: string;
+  company_id: string;
+  phone_number: string;
+  name: string;
+  department_id: string | null;
+  sector_id: string | null;
+  tag_id: string | null;
+  last_message: string | null;
+  last_message_time: string | null;
+  created_at: string;
+  updated_at: string;
+  tag_ids?: string[];
 }
 
 interface Department {
@@ -39,6 +58,7 @@ export default function CompanyDashboard() {
   const { company, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('mensagens');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [contactsDB, setContactsDB] = useState<ContactDB[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
@@ -59,7 +79,7 @@ export default function CompanyDashboard() {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSector, setSelectedSector] = useState<string>('');
-  const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -231,6 +251,39 @@ export default function CompanyDashboard() {
     }
   }, [company]);
 
+  const fetchContacts = async () => {
+    if (!company?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('last_message_time', { ascending: false });
+
+      if (!error && data) {
+        // Buscar tags para cada contato
+        const contactsWithTags = await Promise.all(
+          data.map(async (contact) => {
+            const { data: contactTags } = await supabase
+              .from('contact_tags')
+              .select('tag_id')
+              .eq('contact_id', contact.id);
+
+            return {
+              ...contact,
+              tag_ids: contactTags?.map(ct => ct.tag_id) || []
+            };
+          })
+        );
+
+        setContactsDB(contactsWithTags);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contatos:', error);
+    }
+  };
+
   const fetchDepartments = async () => {
     if (!company?.id) return;
     try {
@@ -280,7 +333,7 @@ export default function CompanyDashboard() {
   };
 
   const handleUpdateContactInfo = async () => {
-    if (!selectedContact || !company?.api_key) return;
+    if (!selectedContact || !company?.api_key || !company?.id) return;
 
     try {
       const updates: any = {};
@@ -293,53 +346,109 @@ export default function CompanyDashboard() {
         updates.sector_id = selectedSector;
       }
 
-      if (selectedTag) {
-        updates.tag_id = selectedTag;
-      }
+      // Buscar tags atuais do contato para verificar se houve mudança
+      const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
+      const currentTags = currentContact?.tag_ids || [];
 
-      if (Object.keys(updates).length === 0) {
-        setToastMessage('Selecione pelo menos uma opção para atualizar');
+      const tagsChanged =
+        selectedTags.length !== currentTags.length ||
+        !selectedTags.every(tag => currentTags.includes(tag));
+
+      if (Object.keys(updates).length === 0 && !tagsChanged) {
+        setToastMessage('Nenhuma alteração foi feita');
         setShowToast(true);
         return;
       }
 
+      // Buscar o ID do contato no banco
+      const { data: contactData, error: contactFetchError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('phone_number', selectedContact)
+        .maybeSingle();
+
+      if (contactFetchError) {
+        console.error('Erro ao buscar contato:', contactFetchError);
+        throw new Error('Erro ao buscar contato');
+      }
+
+      if (!contactData) {
+        throw new Error('Contato não encontrado');
+      }
+
+      const contactId = contactData.id;
+
+      // Atualizar a tabela contacts
+      if (Object.keys(updates).length > 0) {
+        const { error: contactError } = await supabase
+          .from('contacts')
+          .update(updates)
+          .eq('id', contactId);
+
+        if (contactError) {
+          console.error('Erro ao atualizar contato:', contactError);
+          throw contactError;
+        }
+      }
+
+      // Atualizar as tags do contato (sempre, mesmo se for vazio para permitir remoção)
+      // Remover tags antigas
+      await supabase
+        .from('contact_tags')
+        .delete()
+        .eq('contact_id', contactId);
+
+      // Adicionar novas tags (máximo 5) se houver
+      if (selectedTags.length > 0) {
+        const tagsToInsert = selectedTags.slice(0, 5).map(tagId => ({
+          contact_id: contactId,
+          tag_id: tagId
+        }));
+
+        const { error: tagsError } = await supabase
+          .from('contact_tags')
+          .insert(tagsToInsert);
+
+        if (tagsError) {
+          console.error('Erro ao atualizar tags:', tagsError);
+          throw tagsError;
+        }
+      }
+
       // Atualizar ambas as tabelas: messages e sent_messages
-      const [messagesResult, sentMessagesResult] = await Promise.all([
-        supabase
-          .from('messages')
-          .update(updates)
-          .eq('apikey_instancia', company.api_key)
-          .eq('numero', selectedContact)
-          .select(),
-        supabase
-          .from('sent_messages')
-          .update(updates)
-          .eq('apikey_instancia', company.api_key)
-          .eq('numero', selectedContact)
-          .select()
-      ]);
+      if (Object.keys(updates).length > 0) {
+        const [messagesResult, sentMessagesResult] = await Promise.all([
+          supabase
+            .from('messages')
+            .update(updates)
+            .eq('apikey_instancia', company.api_key)
+            .eq('numero', selectedContact),
+          supabase
+            .from('sent_messages')
+            .update(updates)
+            .eq('apikey_instancia', company.api_key)
+            .eq('numero', selectedContact)
+        ]);
 
-      if (messagesResult.error) {
-        console.error('Erro ao atualizar mensagens recebidas:', messagesResult.error);
-        throw new Error(messagesResult.error.message || 'Erro ao atualizar informações');
+        if (messagesResult.error) {
+          console.error('Erro ao atualizar mensagens recebidas:', messagesResult.error);
+        }
+
+        if (sentMessagesResult.error) {
+          console.error('Erro ao atualizar mensagens enviadas:', sentMessagesResult.error);
+        }
       }
 
-      if (sentMessagesResult.error) {
-        console.error('Erro ao atualizar mensagens enviadas:', sentMessagesResult.error);
-        throw new Error(sentMessagesResult.error.message || 'Erro ao atualizar informações');
-      }
-
-      console.log('Atualização bem-sucedida:', {
-        messagesUpdated: messagesResult.data?.length || 0,
-        sentMessagesUpdated: sentMessagesResult.data?.length || 0
-      });
+      console.log('Atualização bem-sucedida');
       setToastMessage('Informações atualizadas com sucesso!');
       setShowToast(true);
       setShowOptionsMenu(false);
       setSelectedDepartment('');
       setSelectedSector('');
-      setSelectedTag('');
+      setSelectedTags([]);
       fetchMessages();
+      fetchContacts();
     } catch (error: any) {
       console.error('Erro ao atualizar informações:', error);
       setToastMessage(`Erro: ${error.message || 'Não foi possível atualizar as informações'}`);
@@ -349,6 +458,7 @@ export default function CompanyDashboard() {
 
   useEffect(() => {
     fetchMessages();
+    fetchContacts();
     fetchDepartments();
     fetchSectors();
     fetchTags();
@@ -357,6 +467,7 @@ export default function CompanyDashboard() {
 
     const interval = setInterval(() => {
       fetchMessages();
+      fetchContacts();
     }, 1000);
 
     const channel = supabase
@@ -371,6 +482,7 @@ export default function CompanyDashboard() {
         },
         () => {
           fetchMessages();
+          fetchContacts();
         }
       )
       .on(
@@ -383,6 +495,19 @@ export default function CompanyDashboard() {
         },
         () => {
           fetchMessages();
+          fetchContacts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contacts',
+          filter: `company_id=eq.${company.id}`,
+        },
+        () => {
+          fetchContacts();
         }
       )
       .subscribe();
@@ -464,6 +589,9 @@ export default function CompanyDashboard() {
       const contactId = getContactId(msg);
 
       if (!contactsMap[contactId]) {
+        // Buscar informações do contato na tabela contacts
+        const contactDB = contactsDB.find(c => c.phone_number === contactId);
+
         contactsMap[contactId] = {
           phoneNumber: contactId,
           name: getContactName(msg),
@@ -471,6 +599,10 @@ export default function CompanyDashboard() {
           lastMessageTime: '',
           unreadCount: 0,
           messages: [],
+          department_id: contactDB?.department_id || undefined,
+          sector_id: contactDB?.sector_id || undefined,
+          tag_ids: contactDB?.tag_ids || [],
+          contact_db_id: contactDB?.id || undefined,
         };
       }
 
@@ -916,7 +1048,7 @@ export default function CompanyDashboard() {
         {activeTab === 'mensagens' && selectedContactData ? (
           <>
             <header className="bg-white/70 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-sm border-b border-gray-200/50">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-1">
                 <button
                   onClick={() => setSidebarOpen(true)}
                   className="md:hidden p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
@@ -926,13 +1058,51 @@ export default function CompanyDashboard() {
                 <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-md">
                   <User className="w-6 h-6 text-white" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
-                  <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                  <p className="text-gray-500 text-xs mb-1">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedContactData.department_id && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        <Briefcase className="w-3 h-3" />
+                        {departments.find(d => d.id === selectedContactData.department_id)?.name || 'Departamento'}
+                      </span>
+                    )}
+                    {selectedContactData.sector_id && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">
+                        <FolderTree className="w-3 h-3" />
+                        {sectors.find(s => s.id === selectedContactData.sector_id)?.name || 'Setor'}
+                      </span>
+                    )}
+                    {selectedContactData.tag_ids && selectedContactData.tag_ids.length > 0 && (
+                      <>
+                        {selectedContactData.tag_ids.map((tagId) => {
+                          const tag = tags.find(t => t.id === tagId);
+                          return tag ? (
+                            <span
+                              key={tagId}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              <Tag className="w-3 h-3" />
+                              {tag.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
-                onClick={() => setShowOptionsMenu(true)}
+                onClick={() => {
+                  // Carregar informações atuais do contato
+                  const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
+                  setSelectedDepartment(currentContact?.department_id || '');
+                  setSelectedSector(currentContact?.sector_id || '');
+                  setSelectedTags(currentContact?.tag_ids || []);
+                  setShowOptionsMenu(true);
+                }}
                 className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all relative z-10"
                 title="Mais opções"
               >
@@ -1297,7 +1467,7 @@ export default function CompanyDashboard() {
                   setShowOptionsMenu(false);
                   setSelectedDepartment('');
                   setSelectedSector('');
-                  setSelectedTag('');
+                  setSelectedTags([]);
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
               >
@@ -1347,20 +1517,46 @@ export default function CompanyDashboard() {
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
                   <Tag className="w-4 h-4 text-teal-600" />
-                  Tag
+                  Tags (máx. 5)
                 </label>
-                <select
-                  value={selectedTag}
-                  onChange={(e) => setSelectedTag(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
-                >
-                  <option value="">Selecione uma tag</option>
-                  {tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  {tags.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-3">Nenhuma tag disponível</p>
+                  ) : (
+                    tags.map((tag) => (
+                      <label
+                        key={tag.id}
+                        className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTags.includes(tag.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              if (selectedTags.length < 5) {
+                                setSelectedTags([...selectedTags, tag.id]);
+                              } else {
+                                setToastMessage('Você pode selecionar no máximo 5 tags');
+                                setShowToast(true);
+                              }
+                            } else {
+                              setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                            }
+                          }}
+                          className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                          disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
+                        />
+                        <span
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white flex-1"
+                          style={{ backgroundColor: tag.color }}
+                        >
+                          <Tag className="w-4 h-4" />
+                          {tag.name}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -1369,7 +1565,7 @@ export default function CompanyDashboard() {
                     setShowOptionsMenu(false);
                     setSelectedDepartment('');
                     setSelectedSector('');
-                    setSelectedTag('');
+                    setSelectedTags([]);
                   }}
                   className="flex-1 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all"
                 >

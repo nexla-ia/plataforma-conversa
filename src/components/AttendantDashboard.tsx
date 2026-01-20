@@ -136,13 +136,15 @@ export default function AttendantDashboard() {
         .order('last_message_time', { ascending: false });
 
       // Filtrar por departamento se o atendente tiver um
+      // Inclui também contatos não atribuídos (department_id null)
       if (attendant?.department_id) {
-        query = query.eq('department_id', attendant.department_id);
+        query = query.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
       }
 
       // Filtrar por setor se o atendente tiver um
+      // Inclui também contatos não atribuídos (sector_id null)
       if (attendant?.sector_id) {
-        query = query.eq('sector_id', attendant.sector_id);
+        query = query.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
       }
 
       const { data, error } = await query;
@@ -360,13 +362,15 @@ export default function AttendantDashboard() {
         .eq('apikey_instancia', company.api_key);
 
       // Filtrar por departamento se o atendente tiver um
+      // Inclui também mensagens não atribuídas (department_id null)
       if (attendant?.department_id) {
-        receivedQuery = receivedQuery.eq('department_id', attendant.department_id);
+        receivedQuery = receivedQuery.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
       }
 
       // Filtrar por setor se o atendente tiver um
+      // Inclui também mensagens não atribuídas (sector_id null)
       if (attendant?.sector_id) {
-        receivedQuery = receivedQuery.eq('sector_id', attendant.sector_id);
+        receivedQuery = receivedQuery.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
       }
 
       let sentQuery = supabase
@@ -376,11 +380,11 @@ export default function AttendantDashboard() {
 
       // Aplicar os mesmos filtros para mensagens enviadas
       if (attendant?.department_id) {
-        sentQuery = sentQuery.eq('department_id', attendant.department_id);
+        sentQuery = sentQuery.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
       }
 
       if (attendant?.sector_id) {
-        sentQuery = sentQuery.eq('sector_id', attendant.sector_id);
+        sentQuery = sentQuery.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
       }
 
       const [receivedResult, sentResult] = await Promise.all([
