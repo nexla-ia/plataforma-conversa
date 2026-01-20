@@ -527,13 +527,19 @@ export default function AttendantDashboard() {
         ...messageData,
       };
 
+      console.log('=== ENVIANDO MENSAGEM ===');
+      console.log('newMessage:', newMessage);
+      console.log('company.id:', company.id);
+      console.log('attendant:', attendant);
+
       const { error } = await supabase
         .from('sent_messages')
         .insert([newMessage]);
 
       if (error) {
         console.error('Erro ao enviar mensagem:', error);
-        alert('Erro ao enviar mensagem');
+        console.error('Detalhes do erro:', JSON.stringify(error, null, 2));
+        alert(`Erro ao enviar mensagem: ${error.message || 'Erro desconhecido'}`);
         return;
       }
 
