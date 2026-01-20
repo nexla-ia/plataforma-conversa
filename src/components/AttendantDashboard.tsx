@@ -129,44 +129,59 @@ export default function AttendantDashboard() {
     if (!company?.id) return;
 
     try {
-      let query = supabase
+      // Buscar TODOS os contatos da empresa
+      const { data, error } = await supabase
         .from('contacts')
         .select('*')
         .eq('company_id', company.id)
         .order('last_message_time', { ascending: false });
 
-      // Filtrar por departamento se o atendente tiver um
-      // Inclui também contatos não atribuídos (department_id null)
-      if (attendant?.department_id) {
-        query = query.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
+      if (error) {
+        console.error('Erro ao buscar contatos:', error);
+        return;
       }
 
-      // Filtrar por setor se o atendente tiver um
-      // Inclui também contatos não atribuídos (sector_id null)
-      if (attendant?.sector_id) {
-        query = query.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
+      if (!data) return;
+
+      console.log('Contatos (antes filtro):', data.length);
+
+      // Filtrar no client-side baseado no departamento e setor do atendente
+      let filteredContacts = data;
+      if (attendant?.department_id || attendant?.sector_id) {
+        filteredContacts = data.filter((contact) => {
+          // Verifica departamento: null OU igual ao do atendente
+          const deptMatch = !attendant?.department_id ||
+                           !contact.department_id ||
+                           contact.department_id === attendant.department_id;
+
+          // Verifica setor: null OU igual ao do atendente
+          const sectorMatch = !attendant?.sector_id ||
+                             !contact.sector_id ||
+                             contact.sector_id === attendant.sector_id;
+
+          // Deve satisfazer AMBAS as condições
+          return deptMatch && sectorMatch;
+        });
       }
 
-      const { data, error } = await query;
+      console.log('Contatos (após filtro):', filteredContacts.length);
 
-      if (!error && data) {
-        // Buscar tags para cada contato
-        const contactsWithTags = await Promise.all(
-          data.map(async (contact) => {
-            const { data: contactTags } = await supabase
-              .from('contact_tags')
-              .select('tag_id')
-              .eq('contact_id', contact.id);
+      // Buscar tags para cada contato
+      const contactsWithTags = await Promise.all(
+        filteredContacts.map(async (contact) => {
+          const { data: contactTags } = await supabase
+            .from('contact_tags')
+            .select('tag_id')
+            .eq('contact_id', contact.id);
 
-            return {
-              ...contact,
-              tag_ids: contactTags?.map(ct => ct.tag_id) || []
-            };
-          })
-        );
+          return {
+            ...contact,
+            tag_ids: contactTags?.map(ct => ct.tag_id) || []
+          };
+        })
+      );
 
-        setContactsDB(contactsWithTags);
-      }
+      setContactsDB(contactsWithTags);
     } catch (error) {
       console.error('Erro ao carregar contatos:', error);
     }
@@ -354,51 +369,63 @@ export default function AttendantDashboard() {
       return;
     }
 
+    console.log('Atendente dept/sector:', attendant?.department_id, attendant?.sector_id);
+
     setLoading(true);
     try {
-      let receivedQuery = supabase
-        .from('messages')
-        .select('*')
-        .eq('apikey_instancia', company.api_key);
-
-      // Filtrar por departamento se o atendente tiver um
-      // Inclui também mensagens não atribuídas (department_id null)
-      if (attendant?.department_id) {
-        receivedQuery = receivedQuery.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
-      }
-
-      // Filtrar por setor se o atendente tiver um
-      // Inclui também mensagens não atribuídas (sector_id null)
-      if (attendant?.sector_id) {
-        receivedQuery = receivedQuery.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
-      }
-
-      let sentQuery = supabase
-        .from('sent_messages')
-        .select('*')
-        .eq('apikey_instancia', company.api_key);
-
-      // Aplicar os mesmos filtros para mensagens enviadas
-      if (attendant?.department_id) {
-        sentQuery = sentQuery.or(`department_id.is.null,department_id.eq.${attendant.department_id}`);
-      }
-
-      if (attendant?.sector_id) {
-        sentQuery = sentQuery.or(`sector_id.is.null,sector_id.eq.${attendant.sector_id}`);
-      }
-
+      // Buscar TODAS as mensagens da empresa
       const [receivedResult, sentResult] = await Promise.all([
-        receivedQuery,
-        sentQuery
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('apikey_instancia', company.api_key),
+        supabase
+          .from('sent_messages')
+          .select('*')
+          .eq('apikey_instancia', company.api_key)
       ]);
 
-      if (receivedResult.error) throw receivedResult.error;
-      if (sentResult.error) throw sentResult.error;
+      if (receivedResult.error) {
+        console.error('Erro ao buscar mensagens recebidas:', receivedResult.error);
+        throw receivedResult.error;
+      }
 
-      const allMessages = [
+      if (sentResult.error) {
+        console.error('Erro ao buscar mensagens enviadas:', sentResult.error);
+        throw sentResult.error;
+      }
+
+      console.log('Mensagens recebidas (antes filtro):', receivedResult.data?.length || 0);
+      console.log('Mensagens enviadas (antes filtro):', sentResult.data?.length || 0);
+
+      // Combinar todas as mensagens
+      let allMessages = [
         ...(receivedResult.data || []),
         ...(sentResult.data || [])
-      ].sort((a, b) => {
+      ];
+
+      // Filtrar no client-side baseado no departamento e setor do atendente
+      if (attendant?.department_id || attendant?.sector_id) {
+        allMessages = allMessages.filter((msg) => {
+          // Verifica departamento: null OU igual ao do atendente
+          const deptMatch = !attendant?.department_id ||
+                           !msg.department_id ||
+                           msg.department_id === attendant.department_id;
+
+          // Verifica setor: null OU igual ao do atendente
+          const sectorMatch = !attendant?.sector_id ||
+                             !msg.sector_id ||
+                             msg.sector_id === attendant.sector_id;
+
+          // Deve satisfazer AMBAS as condições
+          return deptMatch && sectorMatch;
+        });
+      }
+
+      console.log('Total de mensagens (após filtro):', allMessages.length);
+
+      // Ordenar por timestamp
+      allMessages.sort((a, b) => {
         return getMessageTimestamp(a) - getMessageTimestamp(b);
       });
 
