@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, Building2, Layers, ChevronDown } from 'lucide-react';
+import Toast from './Toast';
 
 interface Message {
   id?: number;
@@ -61,6 +62,8 @@ export default function AttendantDashboard() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSector, setSelectedSector] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -192,19 +195,32 @@ export default function AttendantDashboard() {
       }
 
       if (Object.keys(updates).length === 0) {
-        alert('Selecione pelo menos uma opção para atualizar');
+        setToastMessage('Selecione pelo menos uma opção para atualizar');
+        setShowToast(true);
         return;
       }
 
-      const { error } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('apikey_instancia', company.api_key)
-        .eq('numero', openDropdownContact);
+      // Atualizar ambas as tabelas: messages e sent_messages
+      const [messagesResult, sentMessagesResult] = await Promise.all([
+        supabase
+          .from('messages')
+          .update(updates)
+          .eq('apikey_instancia', company.api_key)
+          .eq('numero', openDropdownContact)
+          .select(),
+        supabase
+          .from('sent_messages')
+          .update(updates)
+          .eq('apikey_instancia', company.api_key)
+          .eq('numero', openDropdownContact)
+          .select()
+      ]);
 
-      if (error) throw error;
+      if (messagesResult.error) throw messagesResult.error;
+      if (sentMessagesResult.error) throw sentMessagesResult.error;
 
-      alert('Informações atualizadas com sucesso!');
+      setToastMessage('Informações atualizadas com sucesso!');
+      setShowToast(true);
       setOpenDropdownContact(null);
       setSelectedDepartment('');
       setSelectedSector('');
@@ -212,7 +228,8 @@ export default function AttendantDashboard() {
       fetchMessages();
     } catch (error) {
       console.error('Erro ao atualizar informações:', error);
-      alert('Erro ao atualizar informações');
+      setToastMessage('Erro ao atualizar informações');
+      setShowToast(true);
     }
   };
 
@@ -229,16 +246,33 @@ export default function AttendantDashboard() {
         .select('*')
         .eq('apikey_instancia', company.api_key);
 
+      // Filtrar por departamento se o atendente tiver um
+      if (attendant?.department_id) {
+        receivedQuery = receivedQuery.eq('department_id', attendant.department_id);
+      }
+
+      // Filtrar por setor se o atendente tiver um
       if (attendant?.sector_id) {
-        receivedQuery = receivedQuery.or(`sector_id.eq.${attendant.sector_id},sector_id.is.null`);
+        receivedQuery = receivedQuery.eq('sector_id', attendant.sector_id);
+      }
+
+      let sentQuery = supabase
+        .from('sent_messages')
+        .select('*')
+        .eq('apikey_instancia', company.api_key);
+
+      // Aplicar os mesmos filtros para mensagens enviadas
+      if (attendant?.department_id) {
+        sentQuery = sentQuery.eq('department_id', attendant.department_id);
+      }
+
+      if (attendant?.sector_id) {
+        sentQuery = sentQuery.eq('sector_id', attendant.sector_id);
       }
 
       const [receivedResult, sentResult] = await Promise.all([
         receivedQuery,
-        supabase
-          .from('sent_messages')
-          .select('*')
-          .eq('apikey_instancia', company.api_key)
+        sentQuery
       ]);
 
       if (receivedResult.error) throw receivedResult.error;
@@ -487,6 +521,12 @@ export default function AttendantDashboard() {
 
   return (
     <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setShowToast(false)}
+        />
+      )}
       <div
         className={`${
           sidebarOpen ? 'flex' : 'hidden'

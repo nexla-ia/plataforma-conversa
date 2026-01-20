@@ -6,6 +6,7 @@ import DepartmentsManagement from './DepartmentsManagement';
 import SectorsManagement from './SectorsManagement';
 import AttendantsManagement from './AttendantsManagement';
 import TagsManagement from './TagsManagement';
+import Toast from './Toast';
 
 interface Contact {
   phoneNumber: string;
@@ -59,6 +60,8 @@ export default function CompanyDashboard() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSector, setSelectedSector] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -295,24 +298,43 @@ export default function CompanyDashboard() {
       }
 
       if (Object.keys(updates).length === 0) {
-        alert('Selecione pelo menos uma opção para atualizar');
+        setToastMessage('Selecione pelo menos uma opção para atualizar');
+        setShowToast(true);
         return;
       }
 
-      const { data, error, count } = await supabase
-        .from('messages')
-        .update(updates)
-        .eq('apikey_instancia', company.api_key)
-        .eq('numero', selectedContact)
-        .select();
+      // Atualizar ambas as tabelas: messages e sent_messages
+      const [messagesResult, sentMessagesResult] = await Promise.all([
+        supabase
+          .from('messages')
+          .update(updates)
+          .eq('apikey_instancia', company.api_key)
+          .eq('numero', selectedContact)
+          .select(),
+        supabase
+          .from('sent_messages')
+          .update(updates)
+          .eq('apikey_instancia', company.api_key)
+          .eq('numero', selectedContact)
+          .select()
+      ]);
 
-      if (error) {
-        console.error('Erro detalhado:', error);
-        throw new Error(error.message || 'Erro ao atualizar informações');
+      if (messagesResult.error) {
+        console.error('Erro ao atualizar mensagens recebidas:', messagesResult.error);
+        throw new Error(messagesResult.error.message || 'Erro ao atualizar informações');
       }
 
-      console.log('Atualização bem-sucedida:', { data, count });
-      alert('Informações atualizadas com sucesso!');
+      if (sentMessagesResult.error) {
+        console.error('Erro ao atualizar mensagens enviadas:', sentMessagesResult.error);
+        throw new Error(sentMessagesResult.error.message || 'Erro ao atualizar informações');
+      }
+
+      console.log('Atualização bem-sucedida:', {
+        messagesUpdated: messagesResult.data?.length || 0,
+        sentMessagesUpdated: sentMessagesResult.data?.length || 0
+      });
+      setToastMessage('Informações atualizadas com sucesso!');
+      setShowToast(true);
       setShowOptionsMenu(false);
       setSelectedDepartment('');
       setSelectedSector('');
@@ -320,7 +342,8 @@ export default function CompanyDashboard() {
       fetchMessages();
     } catch (error: any) {
       console.error('Erro ao atualizar informações:', error);
-      alert(`Erro: ${error.message || 'Não foi possível atualizar as informações'}`);
+      setToastMessage(`Erro: ${error.message || 'Não foi possível atualizar as informações'}`);
+      setShowToast(true);
     }
   };
 
@@ -525,13 +548,16 @@ export default function CompanyDashboard() {
 
       const { data: existingMessages } = await supabase
         .from('messages')
-        .select('instancia')
+        .select('instancia, department_id, sector_id, tag_id')
         .eq('numero', selectedContact)
         .eq('apikey_instancia', company.api_key)
         .order('created_at', { ascending: false })
         .limit(1);
 
       const instanciaValue = existingMessages?.[0]?.instancia || company.name;
+      const departmentId = existingMessages?.[0]?.department_id || null;
+      const sectorId = existingMessages?.[0]?.sector_id || null;
+      const tagId = existingMessages?.[0]?.tag_id || null;
 
       const newMessage = {
         numero: selectedContact,
@@ -543,6 +569,9 @@ export default function CompanyDashboard() {
         instancia: instanciaValue,
         idmessage: generatedIdMessage,
         company_id: company.id,
+        department_id: departmentId,
+        sector_id: sectorId,
+        tag_id: tagId,
         ...messageData,
       };
 
@@ -716,6 +745,12 @@ export default function CompanyDashboard() {
 
   return (
     <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setShowToast(false)}
+        />
+      )}
       <div
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
