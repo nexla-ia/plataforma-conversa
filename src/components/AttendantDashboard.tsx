@@ -404,8 +404,21 @@ export default function AttendantDashboard() {
         ...(sentResult.data || [])
       ];
 
+      console.log('Total antes do filtro:', allMessages.length);
+
+      // Mostrar amostra dos dados para debug
+      if (allMessages.length > 0) {
+        console.log('Exemplo de mensagem:', {
+          numero: allMessages[0].numero,
+          department_id: allMessages[0].department_id,
+          sector_id: allMessages[0].sector_id,
+          message: allMessages[0].message?.substring(0, 50)
+        });
+      }
+
       // Filtrar no client-side baseado no departamento e setor do atendente
       if (attendant?.department_id || attendant?.sector_id) {
+        const beforeFilter = allMessages.length;
         allMessages = allMessages.filter((msg) => {
           // Verifica departamento: null OU igual ao do atendente
           const deptMatch = !attendant?.department_id ||
@@ -420,6 +433,9 @@ export default function AttendantDashboard() {
           // Deve satisfazer AMBAS as condições
           return deptMatch && sectorMatch;
         });
+        console.log(`Filtro aplicado: ${beforeFilter} → ${allMessages.length} mensagens`);
+      } else {
+        console.log('Sem filtro (atendente sem dept/sector)');
       }
 
       console.log('Total de mensagens (após filtro):', allMessages.length);
@@ -584,14 +600,29 @@ export default function AttendantDashboard() {
   };
 
   const groupMessagesByContact = (): Contact[] => {
+    console.log('Agrupando mensagens por contato. Total de mensagens:', messages.length);
+    console.log('ContactsDB disponíveis:', contactsDB.length);
+
+    if (contactsDB.length > 0) {
+      console.log('Exemplo contactDB phone_number:', contactsDB[0].phone_number);
+    }
+
     const contactsMap: { [key: string]: Contact } = {};
 
-    messages.forEach((msg) => {
+    messages.forEach((msg, idx) => {
       const contactId = getContactId(msg);
+
+      if (idx < 2) {
+        console.log(`Mensagem ${idx} contactId:`, contactId, 'numero:', msg.numero, 'sender:', msg.sender);
+      }
 
       if (!contactsMap[contactId]) {
         // Buscar informações do contato na tabela contacts
         const contactDB = contactsDB.find(c => c.phone_number === contactId);
+
+        if (idx < 2) {
+          console.log(`ContactDB encontrado para ${contactId}:`, !!contactDB);
+        }
 
         contactsMap[contactId] = {
           phoneNumber: contactId,
@@ -631,6 +662,7 @@ export default function AttendantDashboard() {
       return dateB - dateA;
     });
 
+    console.log('Contatos agrupados:', contacts.length);
     return contacts;
   };
 
