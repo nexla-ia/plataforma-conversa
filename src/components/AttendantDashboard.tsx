@@ -67,6 +67,8 @@ interface TagItem {
 
 export default function AttendantDashboard() {
   const { attendant, company, signOut } = useAuth();
+  console.log('🔄 AttendantDashboard renderizou. Attendant:', attendant?.name, 'Company:', company?.name);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [contactsDB, setContactsDB] = useState<ContactDB[]>([]);
   const [messageText, setMessageText] = useState('');
@@ -104,7 +106,13 @@ export default function AttendantDashboard() {
   }, [openDropdownContact]);
 
   useEffect(() => {
+    console.log('=== USEEFFECT PRINCIPAL ===');
+    console.log('Attendant existe?', !!attendant);
+    console.log('Company existe?', !!company);
+    console.log('Company API Key:', company?.api_key);
+
     if (attendant && company) {
+      console.log('✓ Attendant e Company carregados. Iniciando fetch...');
       fetchSector();
       fetchMessages();
       fetchContacts();
@@ -113,6 +121,7 @@ export default function AttendantDashboard() {
       fetchTags();
       subscribeToMessages();
     } else {
+      console.log('✗ Attendant ou Company não carregados ainda');
       setLoading(false);
     }
   }, [attendant, company]);
@@ -126,9 +135,15 @@ export default function AttendantDashboard() {
   };
 
   const fetchContacts = async () => {
-    if (!company?.id) return;
+    if (!company?.id) {
+      console.log('fetchContacts: company.id não existe');
+      return;
+    }
 
     try {
+      console.log('=== FETCH CONTACTS ===');
+      console.log('Buscando contatos para company_id:', company.id);
+
       // Buscar TODOS os contatos da empresa
       const { data, error } = await supabase
         .from('contacts')
@@ -141,7 +156,10 @@ export default function AttendantDashboard() {
         return;
       }
 
-      if (!data) return;
+      if (!data) {
+        console.log('Nenhum contato retornado');
+        return;
+      }
 
       console.log('Contatos (antes filtro):', data.length);
 
@@ -181,9 +199,10 @@ export default function AttendantDashboard() {
         })
       );
 
+      console.log('✓ Salvando', contactsWithTags.length, 'contacts no state');
       setContactsDB(contactsWithTags);
     } catch (error) {
-      console.error('Erro ao carregar contatos:', error);
+      console.error('❌ ERRO ao carregar contatos:', error);
     }
   };
 
@@ -364,15 +383,25 @@ export default function AttendantDashboard() {
   };
 
   const fetchMessages = async () => {
+    console.log('=== INÍCIO FETCH MESSAGES ===');
+    console.log('Company:', { id: company?.id, name: company?.name, api_key: company?.api_key });
+    console.log('Attendant:', {
+      id: attendant?.id,
+      name: attendant?.name,
+      dept: attendant?.department_id,
+      sector: attendant?.sector_id
+    });
+
     if (!company?.api_key) {
+      console.log('ABORTAR: company.api_key não existe');
       setLoading(false);
       return;
     }
 
-    console.log('Atendente dept/sector:', attendant?.department_id, attendant?.sector_id);
-
     setLoading(true);
     try {
+      console.log('Buscando mensagens com apikey_instancia:', company.api_key);
+
       // Buscar TODAS as mensagens da empresa
       const [receivedResult, sentResult] = await Promise.all([
         supabase
@@ -445,11 +474,13 @@ export default function AttendantDashboard() {
         return getMessageTimestamp(a) - getMessageTimestamp(b);
       });
 
+      console.log('✓ Salvando', allMessages.length, 'mensagens no state');
       setMessages(allMessages);
       setTimeout(scrollToBottom, 100);
     } catch (error) {
-      console.error('Erro ao carregar mensagens:', error);
+      console.error('❌ ERRO ao carregar mensagens:', error);
     } finally {
+      console.log('=== FIM FETCH MESSAGES ===');
       setLoading(false);
     }
   };
@@ -572,10 +603,14 @@ export default function AttendantDashboard() {
   };
 
   const getContactId = (msg: Message): string => {
-    return msg.numero || msg.sender || 'Desconhecido';
+    // Normalizar: pegar sempre o 'numero' e remover @s.whatsapp.net
+    const rawNumber = msg.numero || msg.sender || 'Desconhecido';
+    const normalized = rawNumber.includes('@') ? rawNumber.split('@')[0] : rawNumber;
+    return normalized;
   };
 
   const getPhoneNumber = (contactId: string): string => {
+    // Já normalizado pela getContactId
     if (contactId.includes('@')) {
       return contactId.split('@')[0];
     }
@@ -610,18 +645,24 @@ export default function AttendantDashboard() {
     const contactsMap: { [key: string]: Contact } = {};
 
     messages.forEach((msg, idx) => {
-      const contactId = getContactId(msg);
+      const contactId = getContactId(msg); // já normalizado
 
       if (idx < 2) {
-        console.log(`Mensagem ${idx} contactId:`, contactId, 'numero:', msg.numero, 'sender:', msg.sender);
+        console.log(`Mensagem ${idx} contactId normalizado:`, contactId, 'numero raw:', msg.numero);
       }
 
       if (!contactsMap[contactId]) {
         // Buscar informações do contato na tabela contacts
-        const contactDB = contactsDB.find(c => c.phone_number === contactId);
+        // Normalizar o phone_number do contactDB para comparar
+        const contactDB = contactsDB.find(c => {
+          const normalizedPhone = c.phone_number.includes('@')
+            ? c.phone_number.split('@')[0]
+            : c.phone_number;
+          return normalizedPhone === contactId;
+        });
 
         if (idx < 2) {
-          console.log(`ContactDB encontrado para ${contactId}:`, !!contactDB);
+          console.log(`ContactDB encontrado para ${contactId}:`, !!contactDB, contactDB?.name);
         }
 
         contactsMap[contactId] = {
