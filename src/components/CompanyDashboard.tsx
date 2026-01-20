@@ -299,23 +299,28 @@ export default function CompanyDashboard() {
         return;
       }
 
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from('messages')
         .update(updates)
         .eq('apikey_instancia', company.api_key)
-        .eq('numero', selectedContact);
+        .eq('numero', selectedContact)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro detalhado:', error);
+        throw new Error(error.message || 'Erro ao atualizar informações');
+      }
 
+      console.log('Atualização bem-sucedida:', { data, count });
       alert('Informações atualizadas com sucesso!');
       setShowOptionsMenu(false);
       setSelectedDepartment('');
       setSelectedSector('');
       setSelectedTag('');
       fetchMessages();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao atualizar informações:', error);
-      alert('Erro ao atualizar informações');
+      alert(`Erro: ${error.message || 'Não foi possível atualizar as informações'}`);
     }
   };
 
