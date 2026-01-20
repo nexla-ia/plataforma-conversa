@@ -30,7 +30,8 @@ interface Contact {
   messages: Message[];
   department_id?: string;
   sector_id?: string;
-  tag_id?: string;
+  tag_ids?: string[];
+  contact_db_id?: string;
 }
 
 interface ContactDB {
@@ -45,6 +46,7 @@ interface ContactDB {
   last_message_time: string | null;
   created_at: string;
   updated_at: string;
+  tag_ids?: string[];
 }
 
 interface Sector {
@@ -79,7 +81,7 @@ export default function AttendantDashboard() {
   const [tags, setTags] = useState<TagItem[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedSector, setSelectedSector] = useState<string>('');
-  const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -91,7 +93,7 @@ export default function AttendantDashboard() {
         setOpenDropdownContact(null);
         setSelectedDepartment('');
         setSelectedSector('');
-        setSelectedTag('');
+        setSelectedTags([]);
       }
     };
 
@@ -146,7 +148,22 @@ export default function AttendantDashboard() {
       const { data, error } = await query;
 
       if (!error && data) {
-        setContactsDB(data);
+        // Buscar tags para cada contato
+        const contactsWithTags = await Promise.all(
+          data.map(async (contact) => {
+            const { data: contactTags } = await supabase
+              .from('contact_tags')
+              .select('tag_id')
+              .eq('contact_id', contact.id);
+
+            return {
+              ...contact,
+              tag_ids: contactTags?.map(ct => ct.tag_id) || []
+            };
+          })
+        );
+
+        setContactsDB(contactsWithTags);
       }
     } catch (error) {
       console.error('Erro ao carregar contatos:', error);
@@ -226,7 +243,7 @@ export default function AttendantDashboard() {
   };
 
   const handleUpdateContactInfo = async () => {
-    if (!openDropdownContact || !company?.api_key) return;
+    if (!openDropdownContact || !company?.api_key || !company?.id) return;
 
     try {
       const updates: any = {};
@@ -239,41 +256,87 @@ export default function AttendantDashboard() {
         updates.sector_id = selectedSector;
       }
 
-      if (selectedTag) {
-        updates.tag_id = selectedTag;
-      }
+      // Buscar tags atuais do contato para verificar se houve mudança
+      const currentContact = contactsDB.find(c => c.phone_number === openDropdownContact);
+      const currentTags = currentContact?.tag_ids || [];
 
-      if (Object.keys(updates).length === 0) {
-        setToastMessage('Selecione pelo menos uma opção para atualizar');
+      const tagsChanged =
+        selectedTags.length !== currentTags.length ||
+        !selectedTags.every(tag => currentTags.includes(tag));
+
+      if (Object.keys(updates).length === 0 && !tagsChanged) {
+        setToastMessage('Nenhuma alteração foi feita');
         setShowToast(true);
         return;
       }
 
-      // Atualizar ambas as tabelas: messages e sent_messages
-      const [messagesResult, sentMessagesResult] = await Promise.all([
-        supabase
-          .from('messages')
-          .update(updates)
-          .eq('apikey_instancia', company.api_key)
-          .eq('numero', openDropdownContact)
-          .select(),
-        supabase
-          .from('sent_messages')
-          .update(updates)
-          .eq('apikey_instancia', company.api_key)
-          .eq('numero', openDropdownContact)
-          .select()
-      ]);
+      // Buscar o ID do contato no banco
+      const { data: contactData } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('company_id', company.id)
+        .eq('phone_number', openDropdownContact)
+        .maybeSingle();
 
-      if (messagesResult.error) throw messagesResult.error;
-      if (sentMessagesResult.error) throw sentMessagesResult.error;
+      if (!contactData) {
+        throw new Error('Contato não encontrado');
+      }
+
+      const contactId = contactData.id;
+
+      // Atualizar a tabela contacts
+      if (Object.keys(updates).length > 0) {
+        const { error: contactError } = await supabase
+          .from('contacts')
+          .update(updates)
+          .eq('id', contactId);
+
+        if (contactError) throw contactError;
+      }
+
+      // Atualizar as tags do contato (sempre, mesmo se for vazio para permitir remoção)
+      // Remover tags antigas
+      await supabase
+        .from('contact_tags')
+        .delete()
+        .eq('contact_id', contactId);
+
+      // Adicionar novas tags (máximo 5) se houver
+      if (selectedTags.length > 0) {
+        const tagsToInsert = selectedTags.slice(0, 5).map(tagId => ({
+          contact_id: contactId,
+          tag_id: tagId
+        }));
+
+        const { error: tagsError } = await supabase
+          .from('contact_tags')
+          .insert(tagsToInsert);
+
+        if (tagsError) throw tagsError;
+      }
+
+      // Atualizar ambas as tabelas: messages e sent_messages
+      if (Object.keys(updates).length > 0) {
+        await Promise.all([
+          supabase
+            .from('messages')
+            .update(updates)
+            .eq('apikey_instancia', company.api_key)
+            .eq('numero', openDropdownContact),
+          supabase
+            .from('sent_messages')
+            .update(updates)
+            .eq('apikey_instancia', company.api_key)
+            .eq('numero', openDropdownContact)
+        ]);
+      }
 
       setToastMessage('Informações atualizadas com sucesso!');
       setShowToast(true);
       setOpenDropdownContact(null);
       setSelectedDepartment('');
       setSelectedSector('');
-      setSelectedTag('');
+      setSelectedTags([]);
       fetchMessages();
       fetchContacts();
     } catch (error) {
@@ -508,7 +571,8 @@ export default function AttendantDashboard() {
           messages: [],
           department_id: contactDB?.department_id || undefined,
           sector_id: contactDB?.sector_id || undefined,
-          tag_id: contactDB?.tag_id || undefined,
+          tag_ids: contactDB?.tag_ids || [],
+          contact_db_id: contactDB?.id || undefined,
         };
       }
 
@@ -687,9 +751,18 @@ export default function AttendantDashboard() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenDropdownContact(
-                          openDropdownContact === contact.phoneNumber ? null : contact.phoneNumber
-                        );
+                        if (openDropdownContact === contact.phoneNumber) {
+                          setOpenDropdownContact(null);
+                          setSelectedDepartment('');
+                          setSelectedSector('');
+                          setSelectedTags([]);
+                        } else {
+                          setOpenDropdownContact(contact.phoneNumber);
+                          // Carregar informações atuais do contato
+                          setSelectedDepartment(contact.department_id || '');
+                          setSelectedSector(contact.sector_id || '');
+                          setSelectedTags(contact.tag_ids || []);
+                        }
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
                       title="Opções"
@@ -743,20 +816,46 @@ export default function AttendantDashboard() {
                       <div>
                         <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-2">
                           <Tag className="w-3 h-3 text-blue-600" />
-                          Tag
+                          Tags (máx. 5)
                         </label>
-                        <select
-                          value={selectedTag}
-                          onChange={(e) => setSelectedTag(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-xs text-gray-900"
-                        >
-                          <option value="">Selecionar</option>
-                          {tags.map((tag) => (
-                            <option key={tag.id} value={tag.id}>
-                              {tag.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-2">
+                          {tags.length === 0 ? (
+                            <p className="text-xs text-gray-500 text-center py-2">Nenhuma tag disponível</p>
+                          ) : (
+                            tags.map((tag) => (
+                              <label
+                                key={tag.id}
+                                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTags.includes(tag.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      if (selectedTags.length < 5) {
+                                        setSelectedTags([...selectedTags, tag.id]);
+                                      } else {
+                                        setToastMessage('Você pode selecionar no máximo 5 tags');
+                                        setShowToast(true);
+                                      }
+                                    } else {
+                                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
+                                />
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-white flex-1"
+                                  style={{ backgroundColor: tag.color }}
+                                >
+                                  <Tag className="w-3 h-3" />
+                                  {tag.name}
+                                </span>
+                              </label>
+                            ))
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex gap-2 pt-2">
@@ -765,7 +864,7 @@ export default function AttendantDashboard() {
                             setOpenDropdownContact(null);
                             setSelectedDepartment('');
                             setSelectedSector('');
-                            setSelectedTag('');
+                            setSelectedTags([]);
                           }}
                           className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-all text-xs"
                         >
@@ -816,14 +915,22 @@ export default function AttendantDashboard() {
                       {sectors.find(s => s.id === selectedContactData.sector_id)?.name || 'Setor'}
                     </span>
                   )}
-                  {selectedContactData.tag_id && (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                      style={{ backgroundColor: tags.find(t => t.id === selectedContactData.tag_id)?.color || '#6366f1' }}
-                    >
-                      <Tag className="w-3 h-3" />
-                      {tags.find(t => t.id === selectedContactData.tag_id)?.name || 'Tag'}
-                    </span>
+                  {selectedContactData.tag_ids && selectedContactData.tag_ids.length > 0 && (
+                    <>
+                      {selectedContactData.tag_ids.map((tagId) => {
+                        const tag = tags.find(t => t.id === tagId);
+                        return tag ? (
+                          <span
+                            key={tagId}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                            style={{ backgroundColor: tag.color }}
+                          >
+                            <Tag className="w-3 h-3" />
+                            {tag.name}
+                          </span>
+                        ) : null;
+                      })}
+                    </>
                   )}
                 </div>
               </div>
