@@ -16,6 +16,22 @@ interface Contact {
   messages: Message[];
 }
 
+interface Department {
+  id: string;
+  name: string;
+}
+
+interface Sector {
+  id: string;
+  name: string;
+}
+
+interface TagItem {
+  id: string;
+  name: string;
+  color: string;
+}
+
 type TabType = 'mensagens' | 'departamentos' | 'setores' | 'atendentes' | 'tags';
 
 export default function CompanyDashboard() {
@@ -36,6 +52,13 @@ export default function CompanyDashboard() {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [imageModalSrc, setImageModalSrc] = useState('');
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedSector, setSelectedSector] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -205,8 +228,102 @@ export default function CompanyDashboard() {
     }
   }, [company]);
 
+  const fetchDepartments = async () => {
+    if (!company?.api_key) return;
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('company_api_key', company.api_key)
+        .order('name');
+
+      if (error) throw error;
+      setDepartments(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar departamentos:', error);
+    }
+  };
+
+  const fetchSectors = async () => {
+    if (!company?.api_key) return;
+    try {
+      const { data, error } = await supabase
+        .from('sectors')
+        .select('*')
+        .eq('company_api_key', company.api_key)
+        .order('name');
+
+      if (error) throw error;
+      setSectors(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar setores:', error);
+    }
+  };
+
+  const fetchTags = async () => {
+    if (!company?.api_key) return;
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('*')
+        .eq('company_api_key', company.api_key)
+        .order('name');
+
+      if (error) throw error;
+      setTags(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar tags:', error);
+    }
+  };
+
+  const handleUpdateContactInfo = async () => {
+    if (!selectedContact || !company?.api_key) return;
+
+    try {
+      const updates: any = {};
+
+      if (selectedDepartment) {
+        updates.department_id = selectedDepartment;
+      }
+
+      if (selectedSector) {
+        updates.sector_id = selectedSector;
+      }
+
+      if (selectedTag) {
+        updates.tag_id = selectedTag;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        alert('Selecione pelo menos uma opção para atualizar');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('messages')
+        .update(updates)
+        .eq('apikey_instancia', company.api_key)
+        .eq('numero', selectedContact);
+
+      if (error) throw error;
+
+      alert('Informações atualizadas com sucesso!');
+      setShowOptionsMenu(false);
+      setSelectedDepartment('');
+      setSelectedSector('');
+      setSelectedTag('');
+      fetchMessages();
+    } catch (error) {
+      console.error('Erro ao atualizar informações:', error);
+      alert('Erro ao atualizar informações');
+    }
+  };
+
   useEffect(() => {
     fetchMessages();
+    fetchDepartments();
+    fetchSectors();
+    fetchTags();
 
     if (!company?.api_key) return;
 
@@ -775,7 +892,8 @@ export default function CompanyDashboard() {
                 </div>
               </div>
               <button
-                className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                onClick={() => setShowOptionsMenu(true)}
+                className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all relative z-10"
                 title="Mais opções"
               >
                 <MoreVertical className="w-5 h-5" />
@@ -1118,6 +1236,113 @@ export default function CompanyDashboard() {
               className="max-w-full max-h-[90vh] object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
+          </div>
+        </div>
+      )}
+
+      {showOptionsMenu && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowOptionsMenu(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative z-[101]">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-5 flex items-center justify-between rounded-t-3xl">
+              <h2 className="text-xl font-bold text-gray-900">Definir Informações</h2>
+              <button
+                onClick={() => {
+                  setShowOptionsMenu(false);
+                  setSelectedDepartment('');
+                  setSelectedSector('');
+                  setSelectedTag('');
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Briefcase className="w-4 h-4 text-teal-600" />
+                  Departamento
+                </label>
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione um departamento</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <FolderTree className="w-4 h-4 text-teal-600" />
+                  Setor
+                </label>
+                <select
+                  value={selectedSector}
+                  onChange={(e) => setSelectedSector(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione um setor</option>
+                  {sectors.map((sec) => (
+                    <option key={sec.id} value={sec.id}>
+                      {sec.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                  <Tag className="w-4 h-4 text-teal-600" />
+                  Tag
+                </label>
+                <select
+                  value={selectedTag}
+                  onChange={(e) => setSelectedTag(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
+                >
+                  <option value="">Selecione uma tag</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setSelectedDepartment('');
+                    setSelectedSector('');
+                    setSelectedTag('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateContactInfo}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
