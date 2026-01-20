@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, Building2, Layers, ChevronDown } from 'lucide-react';
+import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, Building2, Layers, ChevronDown, Briefcase } from 'lucide-react';
 import Toast from './Toast';
 
 interface Message {
@@ -28,6 +28,23 @@ interface Contact {
   lastMessageTime: string;
   unreadCount: number;
   messages: Message[];
+  department_id?: string;
+  sector_id?: string;
+  tag_id?: string;
+}
+
+interface ContactDB {
+  id: string;
+  company_id: string;
+  phone_number: string;
+  name: string;
+  department_id: string | null;
+  sector_id: string | null;
+  tag_id: string | null;
+  last_message: string | null;
+  last_message_time: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Sector {
@@ -49,6 +66,7 @@ interface TagItem {
 export default function AttendantDashboard() {
   const { attendant, company, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [contactsDB, setContactsDB] = useState<ContactDB[]>([]);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sector, setSector] = useState<Sector | null>(null);
@@ -87,6 +105,7 @@ export default function AttendantDashboard() {
     if (attendant && company) {
       fetchSector();
       fetchMessages();
+      fetchContacts();
       fetchDepartments();
       fetchSectors();
       fetchTags();
@@ -102,6 +121,36 @@ export default function AttendantDashboard() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const fetchContacts = async () => {
+    if (!company?.id) return;
+
+    try {
+      let query = supabase
+        .from('contacts')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('last_message_time', { ascending: false });
+
+      // Filtrar por departamento se o atendente tiver um
+      if (attendant?.department_id) {
+        query = query.eq('department_id', attendant.department_id);
+      }
+
+      // Filtrar por setor se o atendente tiver um
+      if (attendant?.sector_id) {
+        query = query.eq('sector_id', attendant.sector_id);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        setContactsDB(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contatos:', error);
+    }
   };
 
   const fetchSector = async () => {
@@ -226,6 +275,7 @@ export default function AttendantDashboard() {
       setSelectedSector('');
       setSelectedTag('');
       fetchMessages();
+      fetchContacts();
     } catch (error) {
       console.error('Erro ao atualizar informações:', error);
       setToastMessage('Erro ao atualizar informações');
@@ -295,7 +345,7 @@ export default function AttendantDashboard() {
   };
 
   const subscribeToMessages = () => {
-    if (!company?.api_key) return;
+    if (!company?.api_key || !company?.id) return;
 
     const channel = supabase
       .channel('attendant-messages')
@@ -309,6 +359,7 @@ export default function AttendantDashboard() {
         },
         () => {
           fetchMessages();
+          fetchContacts();
         }
       )
       .on(
@@ -321,6 +372,19 @@ export default function AttendantDashboard() {
         },
         () => {
           fetchMessages();
+          fetchContacts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'contacts',
+          filter: `company_id=eq.${company.id}`,
+        },
+        () => {
+          fetchContacts();
         }
       )
       .subscribe();
@@ -432,6 +496,9 @@ export default function AttendantDashboard() {
       const contactId = getContactId(msg);
 
       if (!contactsMap[contactId]) {
+        // Buscar informações do contato na tabela contacts
+        const contactDB = contactsDB.find(c => c.phone_number === contactId);
+
         contactsMap[contactId] = {
           phoneNumber: contactId,
           name: getContactName(msg),
@@ -439,6 +506,9 @@ export default function AttendantDashboard() {
           lastMessageTime: '',
           unreadCount: 0,
           messages: [],
+          department_id: contactDB?.department_id || undefined,
+          sector_id: contactDB?.sector_id || undefined,
+          tag_id: contactDB?.tag_id || undefined,
         };
       }
 
@@ -730,9 +800,32 @@ export default function AttendantDashboard() {
               <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
                 <User className="w-6 h-6 text-white" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
-                <p className="text-gray-500 text-xs">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                <p className="text-gray-500 text-xs mb-1">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedContactData.department_id && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                      <Briefcase className="w-3 h-3" />
+                      {departments.find(d => d.id === selectedContactData.department_id)?.name || 'Departamento'}
+                    </span>
+                  )}
+                  {selectedContactData.sector_id && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">
+                      <Layers className="w-3 h-3" />
+                      {sectors.find(s => s.id === selectedContactData.sector_id)?.name || 'Setor'}
+                    </span>
+                  )}
+                  {selectedContactData.tag_id && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                      style={{ backgroundColor: tags.find(t => t.id === selectedContactData.tag_id)?.color || '#6366f1' }}
+                    >
+                      <Tag className="w-3 h-3" />
+                      {tags.find(t => t.id === selectedContactData.tag_id)?.name || 'Tag'}
+                    </span>
+                  )}
+                </div>
               </div>
             </header>
 
