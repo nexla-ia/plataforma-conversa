@@ -229,12 +229,12 @@ export default function CompanyDashboard() {
   }, [company]);
 
   const fetchDepartments = async () => {
-    if (!company?.api_key) return;
+    if (!company?.id) return;
     try {
       const { data, error } = await supabase
         .from('departments')
         .select('*')
-        .eq('company_api_key', company.api_key)
+        .eq('company_id', company.id)
         .order('name');
 
       if (error) throw error;
@@ -245,12 +245,12 @@ export default function CompanyDashboard() {
   };
 
   const fetchSectors = async () => {
-    if (!company?.api_key) return;
+    if (!company?.id) return;
     try {
       const { data, error } = await supabase
         .from('sectors')
         .select('*')
-        .eq('company_api_key', company.api_key)
+        .eq('company_id', company.id)
         .order('name');
 
       if (error) throw error;
@@ -261,12 +261,12 @@ export default function CompanyDashboard() {
   };
 
   const fetchTags = async () => {
-    if (!company?.api_key) return;
+    if (!company?.id) return;
     try {
       const { data, error } = await supabase
         .from('tags')
         .select('*')
-        .eq('company_api_key', company.api_key)
+        .eq('company_id', company.id)
         .order('name');
 
       if (error) throw error;
