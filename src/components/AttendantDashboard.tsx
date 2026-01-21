@@ -182,18 +182,18 @@ export default function AttendantDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
-  // ======= FILTRO CORRETO (não bloqueia NULL) =======
+  // ✅ FILTRO ESTRITO: NÃO deixa passar NULL
   function matchAttendantScope(item: { department_id?: string | null; sector_id?: string | null }) {
-    const attDept = attendant?.department_id || null;
-    const attSector = attendant?.sector_id || null;
+    const attDept = attendant?.department_id ?? null;
+    const attSector = attendant?.sector_id ?? null;
 
-    const deptOk =
-      !attDept || item.department_id === attDept || item.department_id === null || item.department_id === undefined;
+    // se atendente não tem dept/setor, não mostra nada
+    if (!attDept || !attSector) return false;
 
-    const sectorOk =
-      !attSector || item.sector_id === attSector || item.sector_id === null || item.sector_id === undefined;
+    // item precisa ter dept/setor preenchidos e bater exatamente
+    if (!item.department_id || !item.sector_id) return false;
 
-    return deptOk && sectorOk;
+    return item.department_id === attDept && item.sector_id === attSector;
   }
 
   const fetchSector = async () => {
@@ -314,6 +314,7 @@ export default function AttendantDashboard() {
 
       let all: Message[] = [...(received.data || []), ...(sent.data || [])];
 
+      // ✅ filtro estrito
       all = all.filter(matchAttendantScope);
 
       all.sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
@@ -420,7 +421,6 @@ export default function AttendantDashboard() {
   const filteredContacts = useMemo(() => {
     const s = searchTerm.toLowerCase().trim();
     if (!s) return contacts;
-
     return contacts.filter((c) => c.name.toLowerCase().includes(s) || c.phoneNumber.toLowerCase().includes(s));
   }, [contacts, searchTerm]);
 
@@ -438,7 +438,8 @@ export default function AttendantDashboard() {
       if (!isNaN(d.getTime())) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       const num = parseInt(timestamp || '0', 10);
-      if (!isNaN(num) && num > 0) return new Date(num * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      if (!isNaN(num) && num > 0)
+        return new Date(num * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       return '';
     } catch {
@@ -719,7 +720,9 @@ export default function AttendantDashboard() {
       {showToast && <Toast message={toastMessage} onClose={() => setShowToast(false)} />}
 
       {/* SIDEBAR */}
-      <div className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}>
+      <div
+        className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
+      >
         <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
@@ -730,7 +733,11 @@ export default function AttendantDashboard() {
               <p className="text-xs text-gray-500">{sector ? `Setor: ${sector.name}` : company?.name}</p>
             </div>
           </div>
-          <button onClick={signOut} className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all" title="Sair">
+          <button
+            onClick={signOut}
+            className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+            title="Sair"
+          >
             <LogOut className="w-4 h-4" />
           </button>
         </header>
@@ -754,7 +761,9 @@ export default function AttendantDashboard() {
               <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4">
                 <MessageCircle className="w-10 h-10 text-blue-500" />
               </div>
-              <p className="text-gray-500 text-sm text-center font-medium">{searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}</p>
+              <p className="text-gray-500 text-sm text-center font-medium">
+                {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
+              </p>
             </div>
           ) : (
             <div className="p-2 space-y-1">
@@ -766,7 +775,9 @@ export default function AttendantDashboard() {
                     if (window.innerWidth < 768) setSidebarOpen(false);
                   }}
                   className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
-                    selectedContact === contact.phoneNumber ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm' : 'hover:bg-white/40'
+                    selectedContact === contact.phoneNumber
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
+                      : 'hover:bg-white/40'
                   }`}
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
@@ -896,11 +907,15 @@ export default function AttendantDashboard() {
                               {/* ✅ TOPO DO BALÃO: NOME + DEPARTAMENTO */}
                               <div className="px-3.5 pt-2 flex items-center justify-between gap-2">
                                 <span className={`text-sm font-semibold ${isSent ? 'text-white' : 'text-blue-600'}`}>
-                                  {isSent ? (attendant?.name || company?.name) : (msg.pushname || msg.numero)}
+                                  {isSent ? attendant?.name || company?.name : msg.pushname || msg.numero}
                                 </span>
 
                                 {deptName && (
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isSent ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                      isSent ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
+                                    }`}
+                                  >
                                     {deptName}
                                   </span>
                                 )}
