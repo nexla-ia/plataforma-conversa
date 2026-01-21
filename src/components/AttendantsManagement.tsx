@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Trash2, Edit2, X, Loader2, UserCircle2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Loader2, UserCircle2, CheckCircle, XCircle, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Department {
@@ -39,6 +39,7 @@ export default function AttendantsManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [maxAttendants, setMaxAttendants] = useState<number>(5);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -73,7 +74,7 @@ export default function AttendantsManagement() {
 
     setLoading(true);
     try {
-      const [attendantsResult, departmentsResult, sectorsResult] = await Promise.all([
+      const [attendantsResult, departmentsResult, sectorsResult, companyResult] = await Promise.all([
         supabase
           .from('attendants')
           .select('*, departments(id, name), sectors(id, name, department_id)')
@@ -88,7 +89,12 @@ export default function AttendantsManagement() {
           .from('sectors')
           .select('id, name, department_id')
           .eq('company_id', company.id)
-          .order('name', { ascending: true })
+          .order('name', { ascending: true }),
+        supabase
+          .from('companies')
+          .select('max_attendants')
+          .eq('id', company.id)
+          .maybeSingle()
       ]);
 
       if (attendantsResult.error) throw attendantsResult.error;
@@ -104,6 +110,7 @@ export default function AttendantsManagement() {
       setAttendants(attendantsWithRelations);
       setDepartments(departmentsResult.data || []);
       setSectors(sectorsResult.data || []);
+      setMaxAttendants(companyResult.data?.max_attendants || 5);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -114,6 +121,11 @@ export default function AttendantsManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company?.id) return;
+
+    if (!editingId && attendants.length >= maxAttendants) {
+      alert(`Limite de ${maxAttendants} atendentes atingido. Exclua um atendente existente para adicionar um novo.`);
+      return;
+    }
 
     if (!editingId && !formData.password) {
       alert('Senha é obrigatória para criar novo atendente');
@@ -242,26 +254,62 @@ export default function AttendantsManagement() {
     );
   }
 
+  const canAddMore = attendants.length < maxAttendants;
+  const limitReached = attendants.length >= maxAttendants;
+
   return (
-    <div className="p-6">
+    <div className="p-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between mb-6">
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-bold text-gray-900">Atendentes</h2>
           <p className="text-sm text-gray-500 mt-1">Gerencie os atendentes da sua empresa</p>
+
+          <div className="flex items-center gap-3 mt-3">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+              limitReached
+                ? 'bg-red-50 border border-red-200'
+                : 'bg-blue-50 border border-blue-200'
+            }`}>
+              <Users className={`w-4 h-4 ${limitReached ? 'text-red-600' : 'text-blue-600'}`} />
+              <span className={`text-sm font-medium ${limitReached ? 'text-red-700' : 'text-blue-700'}`}>
+                {attendants.length} / {maxAttendants} atendentes
+              </span>
+            </div>
+
+            {limitReached && (
+              <span className="text-xs text-red-600 font-medium animate-pulse">
+                Limite atingido
+              </span>
+            )}
+          </div>
         </div>
-        {!showForm && (
+
+        {!showForm && canAddMore && (
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 hover:scale-105 transition-all shadow-md hover:shadow-lg"
           >
             <Plus className="w-5 h-5" />
             Novo Atendente
           </button>
         )}
+
+        {!showForm && limitReached && (
+          <div className="text-center">
+            <button
+              disabled
+              className="flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-xl cursor-not-allowed opacity-60 shadow-sm"
+            >
+              <Plus className="w-5 h-5" />
+              Limite Atingido
+            </button>
+            <p className="text-xs text-gray-500 mt-1">Edite ou exclua atendentes existentes</p>
+          </div>
+        )}
       </div>
 
       {showForm && (
-        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 mb-6 shadow-md">
+        <div className="bg-white/70 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 mb-6 shadow-md animate-in slide-in-from-top duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">
               {editingId ? 'Editar Atendente' : 'Novo Atendente'}
@@ -444,10 +492,11 @@ export default function AttendantsManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {attendants.map((attendant) => (
+          {attendants.map((attendant, index) => (
             <div
               key={attendant.id}
-              className="bg-white/70 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 shadow-md hover:shadow-lg transition-all"
+              className="bg-white/70 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-6 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-in fade-in slide-in-from-bottom"
+              style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-md">

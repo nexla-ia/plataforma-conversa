@@ -144,7 +144,7 @@ export default function TagsManagement() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Tags</h2>
@@ -153,7 +153,7 @@ export default function TagsManagement() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-xl hover:from-teal-600 hover:to-teal-700 hover:scale-105 transition-all shadow-md hover:shadow-lg"
           >
             <Plus className="w-5 h-5" />
             Nova Tag
