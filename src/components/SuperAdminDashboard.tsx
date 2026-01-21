@@ -67,6 +67,7 @@ export default function SuperAdminDashboard() {
   const [api_key, setApiKey] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [maxAttendants, setMaxAttendants] = useState("5");
 
   // =========================
   // Formatação de Telefone
@@ -304,6 +305,7 @@ export default function SuperAdminDashboard() {
           name: name.trim(),
           phone_number: phone_number.trim(),
           api_key: api_key.trim(),
+          max_attendants: parseInt(maxAttendants) || 5,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -327,6 +329,7 @@ export default function SuperAdminDashboard() {
       setApiKey("");
       setEmail("");
       setPassword("");
+      setMaxAttendants("5");
 
       // recarrega lista
       await loadCompanies();
@@ -781,6 +784,23 @@ export default function SuperAdminDashboard() {
                         placeholder="********"
                         minLength={6}
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-2">
+                        Quantos atendentes pode ter?
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        max="100"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                        value={maxAttendants}
+                        onChange={(e) => setMaxAttendants(e.target.value)}
+                        placeholder="5"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Define o limite máximo de atendentes que esta empresa pode cadastrar</p>
                     </div>
 
                     <div className="flex items-center gap-3 mt-4">

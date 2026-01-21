@@ -13,6 +13,7 @@ type Payload = {
   name: string;
   phone_number: string;
   api_key: string;
+  max_attendants?: number;
 };
 
 Deno.serve(async (req: Request) => {
@@ -120,8 +121,9 @@ Deno.serve(async (req: Request) => {
     const name = String(body.name ?? "").trim();
     const phone_number = String(body.phone_number ?? "").trim();
     const api_key = String(body.api_key ?? "").trim();
+    const max_attendants = Number(body.max_attendants ?? 5);
 
-    console.log("Parsed fields:", { email, name, phone_number, api_key, passwordLength: password.length });
+    console.log("Parsed fields:", { email, name, phone_number, api_key, max_attendants, passwordLength: password.length });
 
     if (!email || !password || !name || !phone_number || !api_key) {
       console.error("Missing required fields");
@@ -170,6 +172,7 @@ Deno.serve(async (req: Request) => {
       email,
       user_id: newUserId,
       is_super_admin: false,
+      max_attendants,
     };
     console.log("Company data to insert:", JSON.stringify(companyData));
 
