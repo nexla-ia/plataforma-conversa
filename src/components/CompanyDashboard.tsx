@@ -394,6 +394,38 @@ export default function CompanyDashboard() {
     }
   };
 
+  const checkPaymentNotifications = async () => {
+    try {
+      const {
+        data: { session },
+        error: sessErr,
+      } = await supabase.auth.getSession();
+
+      if (sessErr || !session?.access_token) {
+        console.error('Sem sessão ativa para verificar notificações');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("check-payment-notifications", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error('Erro ao verificar notificações de pagamento:', error);
+        return;
+      }
+
+      console.log('Notificações verificadas:', data);
+
+      // Recarregar notificações após verificação
+      await fetchNotifications();
+    } catch (error) {
+      console.error('Erro ao verificar notificações de pagamento:', error);
+    }
+  };
+
   const handleUpdateContactInfo = async () => {
     if (!selectedContact || !company?.api_key || !company?.id) return;
 
@@ -512,6 +544,7 @@ export default function CompanyDashboard() {
     fetchSectors();
     fetchTags();
     fetchNotifications();
+    checkPaymentNotifications();
 
     if (!company?.api_key) return;
 
