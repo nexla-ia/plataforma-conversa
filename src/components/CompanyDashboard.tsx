@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Message } from '../lib/supabase';
-import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2, Briefcase, FolderTree, UserCircle2, Tag } from 'lucide-react';
+import { MessageSquare, LogOut, MoreVertical, Search, AlertCircle, CheckCheck, FileText, Download, User, Menu, X, Send, Paperclip, Image as ImageIcon, Mic, Smile, Play, Pause, Loader2, Briefcase, FolderTree, UserCircle2, Tag, Bell, XCircle, Info } from 'lucide-react';
 import DepartmentsManagement from './DepartmentsManagement';
 import SectorsManagement from './SectorsManagement';
 import AttendantsManagement from './AttendantsManagement';
@@ -44,6 +44,16 @@ interface Department {
 interface Sector {
   id: string;
   name: string;
+}
+
+interface NotificationItem {
+  id: string;
+  company_id: string;
+  title: string;
+  message: string;
+  type: 'payment' | 'info' | 'warning' | 'error';
+  is_read: boolean;
+  created_at: string;
 }
 
 interface TagItem {
@@ -94,6 +104,9 @@ export default function CompanyDashboard() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -349,6 +362,38 @@ export default function CompanyDashboard() {
     }
   };
 
+  const fetchNotifications = async () => {
+    if (!company?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotifications(data || []);
+      const unread = (data || []).filter(n => !n.is_read).length;
+      setUnreadNotificationsCount(unread);
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+      await fetchNotifications();
+    } catch (error) {
+      console.error('Erro ao marcar notificação como lida:', error);
+    }
+  };
+
   const handleUpdateContactInfo = async () => {
     if (!selectedContact || !company?.api_key || !company?.id) return;
 
@@ -466,6 +511,7 @@ export default function CompanyDashboard() {
     fetchDepartments();
     fetchSectors();
     fetchTags();
+    fetchNotifications();
 
     if (!company?.api_key) return;
 
@@ -512,6 +558,18 @@ export default function CompanyDashboard() {
         },
         () => {
           fetchContacts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `company_id=eq.${company.id}`,
+        },
+        () => {
+          fetchNotifications();
         }
       )
       .subscribe();
@@ -971,6 +1029,86 @@ export default function CompanyDashboard() {
               <Tag className="w-4 h-4" />
               Tags
             </button>
+            <div className="relative ml-2">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
+                title="Notificações"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 top-12 w-96 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 max-h-[500px] overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Notificações</h3>
+                    <button
+                      onClick={() => setShowNotifications(false)}
+                      className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">
+                        <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p>Nenhuma notificação</p>
+                      </div>
+                    ) : (
+                      notifications.map((notif) => {
+                        const typeConfig = {
+                          payment: { icon: Info, bgColor: 'bg-blue-50', iconColor: 'text-blue-500', borderColor: 'border-blue-200' },
+                          info: { icon: Info, bgColor: 'bg-gray-50', iconColor: 'text-gray-500', borderColor: 'border-gray-200' },
+                          warning: { icon: AlertCircle, bgColor: 'bg-yellow-50', iconColor: 'text-yellow-500', borderColor: 'border-yellow-200' },
+                          error: { icon: XCircle, bgColor: 'bg-red-50', iconColor: 'text-red-500', borderColor: 'border-red-200' },
+                        };
+                        const config = typeConfig[notif.type];
+                        const Icon = config.icon;
+
+                        return (
+                          <div
+                            key={notif.id}
+                            className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-all cursor-pointer ${
+                              !notif.is_read ? 'bg-blue-50/30' : ''
+                            }`}
+                            onClick={() => !notif.is_read && markNotificationAsRead(notif.id)}
+                          >
+                            <div className="flex gap-3">
+                              <div className={`${config.bgColor} ${config.borderColor} border rounded-lg p-2 h-fit`}>
+                                <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h4 className="font-semibold text-gray-900 text-sm">{notif.title}</h4>
+                                  {!notif.is_read && (
+                                    <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-600 mb-2">{notif.message}</p>
+                                <p className="text-xs text-gray-400">
+                                  {new Date(notif.created_at).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={signOut}
               className="ml-2 p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"

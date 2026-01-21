@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2, Edit2 } from "lucide-react";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2, Edit2, Bell } from "lucide-react";
 import Modal from "./Modal";
 import Notification from "./Notification";
 
@@ -15,6 +15,7 @@ type Company = {
   is_super_admin?: boolean | null;
   created_at?: string;
   max_attendants?: number;
+  payment_notification_day?: number;
 };
 
 type Message = {
@@ -71,6 +72,7 @@ export default function SuperAdminDashboard() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [maxAttendants, setMaxAttendants] = useState("5");
+  const [paymentNotificationDay, setPaymentNotificationDay] = useState("5");
 
   // Modal and notifications
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; companyId: string; companyName: string }>({
@@ -83,6 +85,14 @@ export default function SuperAdminDashboard() {
 
   // Edit company
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
+
+  // Notification management
+  const [showNotificationForm, setShowNotificationForm] = useState(false);
+  const [selectedCompanyForNotification, setSelectedCompanyForNotification] = useState<Company | null>(null);
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationType, setNotificationType] = useState<'payment' | 'info' | 'warning' | 'error'>('info');
+  const [sendingNotification, setSendingNotification] = useState(false);
 
   // =========================
   // Formatação de Telefone
@@ -321,6 +331,7 @@ export default function SuperAdminDashboard() {
           phone_number: phone_number.trim(),
           api_key: api_key.trim(),
           max_attendants: parseInt(maxAttendants) || 5,
+          payment_notification_day: parseInt(paymentNotificationDay) || 5,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -345,6 +356,7 @@ export default function SuperAdminDashboard() {
       setEmail("");
       setPassword("");
       setMaxAttendants("5");
+      setPaymentNotificationDay("5");
 
       // recarrega lista
       await loadCompanies();
@@ -418,8 +430,57 @@ export default function SuperAdminDashboard() {
     setApiKey(company.api_key);
     setEmail(company.email);
     setMaxAttendants(String(company.max_attendants || 5));
+    setPaymentNotificationDay(String(company.payment_notification_day || 5));
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openNotificationForm = (company: Company) => {
+    setSelectedCompanyForNotification(company);
+    setShowNotificationForm(true);
+    setNotificationTitle("");
+    setNotificationMessage("");
+    setNotificationType('info');
+  };
+
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedCompanyForNotification) return;
+
+    setSendingNotification(true);
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .insert({
+          company_id: selectedCompanyForNotification.id,
+          title: notificationTitle.trim(),
+          message: notificationMessage.trim(),
+          type: notificationType,
+          is_read: false,
+        });
+
+      if (error) throw error;
+
+      setShowNotificationForm(false);
+      setSelectedCompanyForNotification(null);
+      setNotificationTitle("");
+      setNotificationMessage("");
+      setNotificationType('info');
+
+      setNotification({
+        type: 'success',
+        message: `Notificação enviada para ${selectedCompanyForNotification.name}!`
+      });
+    } catch (err: any) {
+      console.error('Erro ao enviar notificação:', err);
+      setNotification({
+        type: 'error',
+        message: err?.message ?? 'Erro ao enviar notificação'
+      });
+    } finally {
+      setSendingNotification(false);
+    }
   };
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
@@ -436,6 +497,7 @@ export default function SuperAdminDashboard() {
           phone_number: phone_number.trim(),
           api_key: api_key.trim(),
           max_attendants: parseInt(maxAttendants) || 5,
+          payment_notification_day: parseInt(paymentNotificationDay) || 5,
         })
         .eq('id', editingCompany);
 
@@ -449,6 +511,7 @@ export default function SuperAdminDashboard() {
       setEmail("");
       setPassword("");
       setMaxAttendants("5");
+      setPaymentNotificationDay("5");
 
       setNotification({
         type: 'success',
@@ -887,21 +950,40 @@ export default function SuperAdminDashboard() {
                       </div>
                     )}
 
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-2">
-                        Quantos atendentes pode ter?
-                      </label>
-                      <input
-                        required
-                        type="number"
-                        min="1"
-                        max="100"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                        value={maxAttendants}
-                        onChange={(e) => setMaxAttendants(e.target.value)}
-                        placeholder="5"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Define o limite máximo de atendentes que esta empresa pode cadastrar</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-2">
+                          Quantos atendentes pode ter?
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          min="1"
+                          max="100"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                          value={maxAttendants}
+                          onChange={(e) => setMaxAttendants(e.target.value)}
+                          placeholder="5"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Limite máximo de atendentes</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-2">
+                          Dia da notificação de pagamento
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          min="1"
+                          max="31"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                          value={paymentNotificationDay}
+                          onChange={(e) => setPaymentNotificationDay(e.target.value)}
+                          placeholder="5"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Dia do mês (1-31) para notificação</p>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-3 mt-4">
@@ -924,6 +1006,7 @@ export default function SuperAdminDashboard() {
                           setEmail("");
                           setPassword("");
                           setMaxAttendants("5");
+                          setPaymentNotificationDay("5");
                         }}
                         className="rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
                       >
@@ -958,6 +1041,13 @@ export default function SuperAdminDashboard() {
                         {!c.is_super_admin && (
                           <div className="flex gap-2">
                             <button
+                              onClick={() => openNotificationForm(c)}
+                              className="p-2 text-purple-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                              title="Enviar notificação"
+                            >
+                              <Bell size={18} />
+                            </button>
+                            <button
                               onClick={() => handleEditCompany(c)}
                               className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Editar empresa"
@@ -989,6 +1079,18 @@ export default function SuperAdminDashboard() {
                         <span className="text-teal-600">🔑</span>
                         <span className="break-all text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded">
                           {c.api_key}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+                        <span className="text-teal-600">👥</span>
+                        <span className="text-gray-700">
+                          Máximo de atendentes: <span className="font-semibold">{c.max_attendants || 5}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+                        <span className="text-teal-600">💰</span>
+                        <span className="text-gray-700">
+                          Notificação de pagamento: Dia <span className="font-semibold">{c.payment_notification_day || 5}</span> do mês
                         </span>
                       </div>
                       {c.user_id && (
@@ -1279,6 +1381,87 @@ export default function SuperAdminDashboard() {
         confirmColor="red"
         loading={deleting}
       />
+
+      {showNotificationForm && selectedCompanyForNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowNotificationForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full mx-4 animate-in zoom-in slide-in-from-bottom-4 duration-300" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-900">Enviar Notificação</h3>
+              <button onClick={() => setShowNotificationForm(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendNotification} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Empresa</label>
+                <input
+                  type="text"
+                  value={selectedCompanyForNotification.name}
+                  disabled
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-gray-900 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Notificação</label>
+                <select
+                  value={notificationType}
+                  onChange={(e) => setNotificationType(e.target.value as 'payment' | 'info' | 'warning' | 'error')}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  required
+                >
+                  <option value="info">Informação</option>
+                  <option value="payment">Pagamento</option>
+                  <option value="warning">Aviso</option>
+                  <option value="error">Erro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Título</label>
+                <input
+                  type="text"
+                  value={notificationTitle}
+                  onChange={(e) => setNotificationTitle(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  placeholder="Ex: Lembrete de Pagamento"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Mensagem</label>
+                <textarea
+                  value={notificationMessage}
+                  onChange={(e) => setNotificationMessage(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 min-h-[120px] resize-y"
+                  placeholder="Digite a mensagem da notificação..."
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={sendingNotification}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white rounded-xl transition-all font-medium shadow-lg disabled:opacity-50"
+                >
+                  {sendingNotification ? 'Enviando...' : 'Enviar Notificação'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationForm(false)}
+                  disabled={sendingNotification}
+                  className="flex-1 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {notification && (
         <Notification
