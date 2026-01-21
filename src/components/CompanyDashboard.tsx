@@ -742,10 +742,11 @@ export default function CompanyDashboard() {
           caption: messageData.caption || null,
           idmessage: generatedIdMessage,
           pushname: company.name,
-        
+
           // 🔹 FORÇADO
           department_name: 'Recepção',
-        
+          sector_name: 'Recepção',
+
           timestamp: new Date().toISOString(),
           instancia: instanciaValue,
           apikey_instancia: company.api_key,
