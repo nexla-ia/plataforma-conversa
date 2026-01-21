@@ -145,7 +145,6 @@ export default function AttendantDashboard() {
       return;
     }
 
-    // logs úteis (sem spam)
     console.log('AttendantDashboard init:', {
       attendant: attendant?.name,
       attendant_id: attendant?.id,
@@ -188,9 +187,6 @@ export default function AttendantDashboard() {
     const attDept = attendant?.department_id || null;
     const attSector = attendant?.sector_id || null;
 
-    // regra: se atendente tem dept/setor, ele deve ver:
-    // - itens do mesmo dept/setor
-    // - OU itens ainda não atribuídos (NULL)
     const deptOk =
       !attDept || item.department_id === attDept || item.department_id === null || item.department_id === undefined;
 
@@ -275,7 +271,6 @@ export default function AttendantDashboard() {
       const raw = (data || []) as ContactDB[];
       const filtered = raw.filter(matchAttendantScope);
 
-      // tags por contato
       const withTags = await Promise.all(
         filtered.map(async (c) => {
           const { data: contactTags } = await supabase.from('contact_tags').select('tag_id').eq('contact_id', c.id);
@@ -309,7 +304,6 @@ export default function AttendantDashboard() {
     }
 
     try {
-      // busca mensagens por apikey_instancia (sem travar por telefone aqui)
       const [received, sent] = await Promise.all([
         supabase.from('messages').select('*').eq('apikey_instancia', company.api_key),
         supabase.from('sent_messages').select('*').eq('apikey_instancia', company.api_key),
@@ -320,10 +314,8 @@ export default function AttendantDashboard() {
 
       let all: Message[] = [...(received.data || []), ...(sent.data || [])];
 
-      // filtro correto do atendente (não bloqueia NULL)
       all = all.filter(matchAttendantScope);
 
-      // ordenar por timestamp
       all.sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
 
       setMessages(all);
@@ -414,7 +406,10 @@ export default function AttendantDashboard() {
       const last = c.messages[c.messages.length - 1];
       c.lastMessage = last?.message || 'Mensagem';
       c.lastMessageTime = safeISO(last?.date_time || last?.created_at || null);
-      c.name = (contactsDB.find((db) => normalizePhone(db.phone_number) === c.phoneNumber)?.name) || last?.pushname || c.phoneNumber;
+      c.name =
+        contactsDB.find((db) => normalizePhone(db.phone_number) === c.phoneNumber)?.name ||
+        last?.pushname ||
+        c.phoneNumber;
       return c;
     });
 
@@ -426,12 +421,7 @@ export default function AttendantDashboard() {
     const s = searchTerm.toLowerCase().trim();
     if (!s) return contacts;
 
-    return contacts.filter((c) => {
-      return (
-        c.name.toLowerCase().includes(s) ||
-        c.phoneNumber.toLowerCase().includes(s)
-      );
-    });
+    return contacts.filter((c) => c.name.toLowerCase().includes(s) || c.phoneNumber.toLowerCase().includes(s));
   }, [contacts, searchTerm]);
 
   const selectedContactData = selectedContact ? contacts.find((c) => c.phoneNumber === selectedContact) : null;
@@ -445,13 +435,11 @@ export default function AttendantDashboard() {
     if (!base) return '';
     try {
       const d = new Date(base);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      }
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
       const num = parseInt(timestamp || '0', 10);
-      if (!isNaN(num) && num > 0) {
-        return new Date(num * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      }
+      if (!isNaN(num) && num > 0) return new Date(num * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
       return '';
     } catch {
       return '';
@@ -478,13 +466,18 @@ export default function AttendantDashboard() {
     const groups: Record<string, Message[]> = {};
     for (const m of msgs) {
       const t = getMessageTimestamp(m);
-      const iso = t ? new Date(t).toISOString() : (m.created_at || new Date().toISOString());
+      const iso = t ? new Date(t).toISOString() : m.created_at || new Date().toISOString();
       const label = formatDateLabel(iso);
-
       if (!groups[label]) groups[label] = [];
       groups[label].push(m);
     }
     return groups;
+  };
+
+  // ✅ NOME DO DEPARTAMENTO PARA MOSTRAR NO BALÃO
+  const getDeptName = (deptId?: string | null) => {
+    if (!deptId) return null;
+    return departments.find((d) => d.id === deptId)?.name || null;
   };
 
   // ======= ATUALIZAR TAGS DO CONTATO =======
@@ -496,8 +489,7 @@ export default function AttendantDashboard() {
       if (!contactDB) throw new Error('Contato não encontrado no DB');
 
       const currentTags = contactDB.tag_ids || [];
-      const changed =
-        selectedTags.length !== currentTags.length || !selectedTags.every((t) => currentTags.includes(t));
+      const changed = selectedTags.length !== currentTags.length || !selectedTags.every((t) => currentTags.includes(t));
 
       if (!changed) {
         setToastMessage('Nenhuma alteração foi feita');
@@ -505,10 +497,8 @@ export default function AttendantDashboard() {
         return;
       }
 
-      // remover
       await supabase.from('contact_tags').delete().eq('contact_id', contactDB.id);
 
-      // inserir
       if (selectedTags.length > 0) {
         const payload = selectedTags.slice(0, 5).map((tagId) => ({ contact_id: contactDB.id, tag_id: tagId }));
         const { error } = await supabase.from('contact_tags').insert(payload);
@@ -520,7 +510,6 @@ export default function AttendantDashboard() {
       setShowTagsModal(false);
       setModalContactPhone(null);
       setSelectedTags([]);
-
       fetchContacts();
     } catch (e) {
       console.error('Erro ao atualizar tags:', e);
@@ -529,7 +518,7 @@ export default function AttendantDashboard() {
     }
   };
 
-  // ======= ENVIO DE MENSAGEM + WEBHOOK COM NOME DO ATENDENTE =======
+  // ======= ENVIO DE MENSAGEM + WEBHOOK COM DEPARTAMENTO =======
   const sendMessage = async (messageData: Partial<Message>) => {
     if (!company || !company.api_key || !selectedContact) return;
 
@@ -537,7 +526,6 @@ export default function AttendantDashboard() {
     try {
       const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
-      // tenta pegar instancia/dept/sector a partir do último registro existente
       const { data: lastMsg } = await supabase
         .from('messages')
         .select('instancia, department_id, sector_id, tag_id')
@@ -576,11 +564,10 @@ export default function AttendantDashboard() {
         caption: messageData.caption || null,
       };
 
-      // salva no banco como "sent_messages"
       const { error } = await supabase.from('sent_messages').insert([rowToInsert]);
       if (error) throw error;
 
-      // formatação do conteúdo quando for atendente (mantive sua regra)
+      // formatação do conteúdo (mantive)
       let formattedMessage = rowToInsert.message || '';
       if (attendant?.function && rowToInsert.tipomessage === 'conversation') {
         formattedMessage = `(${attendant.function}) - ${attendant.name}\n${formattedMessage}`;
@@ -591,9 +578,8 @@ export default function AttendantDashboard() {
         formattedCaption = `(${attendant.function}) - ${attendant.name}\n${formattedCaption}`;
       }
 
-      // ✅ AQUI: JSON enviado para o n8n com nome do atendente
+      // ✅ JSON pro n8n com DEPARTAMENTO (id + nome)
       const webhookPayload = {
-        // ===== dados da mensagem =====
         numero: selectedContact,
         message: formattedMessage,
         tipomessage: rowToInsert.tipomessage || 'conversation',
@@ -606,28 +592,20 @@ export default function AttendantDashboard() {
         timestamp: nowIso,
         instancia: instanciaValue,
         apikey_instancia: company.api_key,
-      
-        // ===== quem enviou =====
+
         sender_type: 'attendant',
         attendant_id: attendant?.id || null,
         attendant_name: attendant?.name || null,
-      
-        // ===== departamento / setor (O QUE VOCÊ QUER) =====
+
         department_id: attendant?.department_id || null,
+        department_name: departments.find((d) => d.id === attendant?.department_id)?.name || null,
+
         sector_id: attendant?.sector_id || null,
-      
-        // (opcional, mas MUITO BOM pro n8n)
-        department_name:
-          departments.find(d => d.id === attendant?.department_id)?.name || null,
-      
-        sector_name:
-          sectors.find(s => s.id === attendant?.sector_id)?.name || null,
-      
-        // ===== contexto da empresa =====
+        sector_name: sectors.find((s) => s.id === attendant?.sector_id)?.name || null,
+
         company_id: company.id,
         company_name: company.name,
       };
-
 
       try {
         const res = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
@@ -636,16 +614,13 @@ export default function AttendantDashboard() {
           body: JSON.stringify(webhookPayload),
         });
 
-        if (!res.ok) {
-          console.error('Webhook falhou:', res.status);
-        }
+        if (!res.ok) console.error('Webhook falhou:', res.status);
       } catch (e) {
         console.error('Erro ao chamar webhook:', e);
       }
 
       setMessageText('');
       setTimeout(scrollToBottom, 50);
-      // opcional: otimista
       fetchMessages();
       fetchContacts();
     } catch (e) {
@@ -744,9 +719,7 @@ export default function AttendantDashboard() {
       {showToast && <Toast message={toastMessage} onClose={() => setShowToast(false)} />}
 
       {/* SIDEBAR */}
-      <div
-        className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
-      >
+      <div className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}>
         <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
@@ -757,11 +730,7 @@ export default function AttendantDashboard() {
               <p className="text-xs text-gray-500">{sector ? `Setor: ${sector.name}` : company?.name}</p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
-            title="Sair"
-          >
+          <button onClick={signOut} className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all" title="Sair">
             <LogOut className="w-4 h-4" />
           </button>
         </header>
@@ -785,9 +754,7 @@ export default function AttendantDashboard() {
               <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4">
                 <MessageCircle className="w-10 h-10 text-blue-500" />
               </div>
-              <p className="text-gray-500 text-sm text-center font-medium">
-                {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
-              </p>
+              <p className="text-gray-500 text-sm text-center font-medium">{searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}</p>
             </div>
           ) : (
             <div className="p-2 space-y-1">
@@ -799,9 +766,7 @@ export default function AttendantDashboard() {
                     if (window.innerWidth < 768) setSidebarOpen(false);
                   }}
                   className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
-                    selectedContact === contact.phoneNumber
-                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
-                      : 'hover:bg-white/40'
+                    selectedContact === contact.phoneNumber ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm' : 'hover:bg-white/40'
                   }`}
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
@@ -811,9 +776,7 @@ export default function AttendantDashboard() {
                   <div className="flex-1 text-left overflow-hidden">
                     <div className="flex items-center justify-between mb-1">
                       <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
-                      <span className="text-xs text-gray-400 ml-2">
-                        {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
-                      </span>
+                      <span className="text-xs text-gray-400 ml-2">{formatTime(contact.lastMessageTime, contact.lastMessageTime)}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -916,8 +879,13 @@ export default function AttendantDashboard() {
                     <div className="space-y-3">
                       {msgs.map((msg) => {
                         const isSent = msg['minha?'] === 'true';
+                        const deptName = getDeptName(msg.department_id);
+
                         return (
-                          <div key={`${msg.id || msg.idmessage || Math.random()}`} className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}>
+                          <div
+                            key={`${msg.id || msg.idmessage || `${msg.created_at}-${Math.random()}`}`}
+                            className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
+                          >
                             <div
                               className={`max-w-[70%] rounded-2xl ${
                                 isSent
@@ -925,13 +893,18 @@ export default function AttendantDashboard() {
                                   : 'bg-white/80 backdrop-blur-sm text-gray-900 rounded-bl-md shadow-md border border-gray-200/50'
                               }`}
                             >
-                              {!isSent && (
-                                <div className="px-3.5 pt-2">
-                                  <span className="text-sm font-semibold text-blue-600">
-                                    {msg.pushname || msg.numero}
+                              {/* ✅ TOPO DO BALÃO: NOME + DEPARTAMENTO */}
+                              <div className="px-3.5 pt-2 flex items-center justify-between gap-2">
+                                <span className={`text-sm font-semibold ${isSent ? 'text-white' : 'text-blue-600'}`}>
+                                  {isSent ? (attendant?.name || company?.name) : (msg.pushname || msg.numero)}
+                                </span>
+
+                                {deptName && (
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isSent ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                                    {deptName}
                                   </span>
-                                </div>
-                              )}
+                                )}
+                              </div>
 
                               {msg.tipomessage && msg.tipomessage !== 'text' && msg.tipomessage !== 'conversation' && (
                                 <span
@@ -1108,10 +1081,7 @@ export default function AttendantDashboard() {
                     <p className="text-sm text-gray-500 text-center py-3">Nenhuma tag disponível</p>
                   ) : (
                     tags.map((t) => (
-                      <label
-                        key={t.id}
-                        className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                      >
+                      <label key={t.id} className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors">
                         <input
                           type="checkbox"
                           checked={selectedTags.includes(t.id)}
