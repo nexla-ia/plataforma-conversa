@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2 } from "lucide-react";
+import { Menu, X, Building2, MessageSquare, Plus, LogOut, Search, User, Send, Paperclip, Image as ImageIcon, RefreshCw, Loader2, Edit2 } from "lucide-react";
+import Modal from "./Modal";
+import Notification from "./Notification";
 
 type Company = {
   id: string;
@@ -12,6 +14,7 @@ type Company = {
   user_id: string | null;
   is_super_admin?: boolean | null;
   created_at?: string;
+  max_attendants?: number;
 };
 
 type Message = {
@@ -68,6 +71,18 @@ export default function SuperAdminDashboard() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [maxAttendants, setMaxAttendants] = useState("5");
+
+  // Modal and notifications
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; companyId: string; companyName: string }>({
+    isOpen: false,
+    companyId: "",
+    companyName: "",
+  });
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Edit company
+  const [editingCompany, setEditingCompany] = useState<string | null>(null);
 
   // =========================
   // Formatação de Telefone
@@ -342,10 +357,25 @@ export default function SuperAdminDashboard() {
   };
 
 
-  const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!confirm(`Tem certeza que deseja deletar a empresa "${companyName}"?\n\nIsto irá deletar PERMANENTEMENTE:\n• Todos os atendentes\n• Todos os departamentos\n• Todos os setores\n• Todas as tags\n• Todas as mensagens\n\nEsta ação não pode ser desfeita!`)) {
-      return;
-    }
+  const openDeleteModal = (companyId: string, companyName: string) => {
+    setDeleteModal({
+      isOpen: true,
+      companyId,
+      companyName,
+    });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      companyId: "",
+      companyName: "",
+    });
+  };
+
+  const handleDeleteCompany = async () => {
+    const { companyId, companyName } = deleteModal;
+    setDeleting(true);
 
     try {
       const { data, error } = await supabase.rpc('delete_company_cascade', {
@@ -354,21 +384,86 @@ export default function SuperAdminDashboard() {
 
       if (error) {
         console.error('Erro ao deletar empresa:', error);
-        setErrorMsg('Erro ao deletar empresa: ' + error.message);
+        setNotification({
+          type: 'error',
+          message: `Erro ao deletar empresa: ${error.message}`
+        });
         return;
       }
 
       if (data?.success) {
-        const deleted = data.deleted;
-        const deletionSummary = `Empresa "${companyName}" deletada com sucesso!\n\nItens removidos:\n• ${deleted.attendants} atendente(s)\n• ${deleted.attendant_users} usuário(s) de atendente do Auth\n• ${deleted.departments} departamento(s)\n• ${deleted.sectors} setor(es)\n• ${deleted.tags} tag(s)\n• ${deleted.messages} mensagem(ns) recebida(s)\n• ${deleted.sent_messages} mensagem(ns) enviada(s)\n• ${deleted.company_user} usuário da empresa no Auth`;
-
-        alert(deletionSummary);
+        closeDeleteModal();
+        setNotification({
+          type: 'success',
+          message: `Empresa "${companyName}" deletada com sucesso!`
+        });
         await loadCompanies();
         await loadMessages();
       }
     } catch (err: any) {
       console.error('Erro ao deletar empresa:', err);
-      setErrorMsg('Erro ao deletar empresa: ' + err.message);
+      setNotification({
+        type: 'error',
+        message: 'Erro inesperado ao deletar empresa'
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditCompany = (company: Company) => {
+    setEditingCompany(company.id);
+    setName(company.name);
+    setPhoneNumber(company.phone_number);
+    setApiKey(company.api_key);
+    setEmail(company.email);
+    setMaxAttendants(String(company.max_attendants || 5));
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleUpdateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingCompany) return;
+
+    setCreating(true);
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          name: name.trim(),
+          phone_number: phone_number.trim(),
+          api_key: api_key.trim(),
+          max_attendants: parseInt(maxAttendants) || 5,
+        })
+        .eq('id', editingCompany);
+
+      if (error) throw error;
+
+      setShowForm(false);
+      setEditingCompany(null);
+      setName("");
+      setPhoneNumber("");
+      setApiKey("");
+      setEmail("");
+      setPassword("");
+      setMaxAttendants("5");
+
+      setNotification({
+        type: 'success',
+        message: 'Empresa atualizada com sucesso!'
+      });
+
+      await loadCompanies();
+    } catch (err: any) {
+      console.error('Erro ao atualizar empresa:', err);
+      setNotification({
+        type: 'error',
+        message: err?.message ?? 'Erro ao atualizar empresa'
+      });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -701,10 +796,10 @@ export default function SuperAdminDashboard() {
               {showForm && (
                 <div className="mb-8 rounded-2xl bg-white/80 border border-teal-200/50 p-6 backdrop-blur-sm shadow-lg">
                   <h3 className="text-xl font-semibold text-gray-900 mb-6">
-                    Cadastrar Nova Empresa
+                    {editingCompany ? 'Editar Empresa' : 'Cadastrar Nova Empresa'}
                   </h3>
 
-                  <form onSubmit={handleCreateCompany} className="grid gap-4">
+                  <form onSubmit={editingCompany ? handleUpdateCompany : handleCreateCompany} className="grid gap-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm text-gray-700 mb-2">
@@ -761,30 +856,36 @@ export default function SuperAdminDashboard() {
                           Email
                         </label>
                         <input
-                          required
+                          required={!editingCompany}
                           type="email"
-                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                          disabled={!!editingCompany}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="empresa@dominio.com"
                         />
+                        {editingCompany && (
+                          <p className="text-xs text-gray-500 mt-1">Email não pode ser alterado</p>
+                        )}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm text-gray-700 mb-2">
-                        Senha <span className="text-gray-500 text-xs">(mínimo 6 caracteres)</span>
-                      </label>
-                      <input
-                        required
-                        type="password"
-                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="********"
-                        minLength={6}
-                      />
-                    </div>
+                    {!editingCompany && (
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-2">
+                          Senha <span className="text-gray-500 text-xs">(mínimo 6 caracteres)</span>
+                        </label>
+                        <input
+                          required
+                          type="password"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="********"
+                          minLength={6}
+                        />
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
@@ -809,12 +910,21 @@ export default function SuperAdminDashboard() {
                         disabled={creating}
                         className="rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 px-6 py-2.5 text-white font-medium hover:from-teal-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
                       >
-                        {creating ? "Cadastrando..." : "Cadastrar Empresa"}
+                        {creating ? (editingCompany ? "Salvando..." : "Cadastrando...") : (editingCompany ? "Salvar Alterações" : "Cadastrar Empresa")}
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setShowForm(false)}
+                        onClick={() => {
+                          setShowForm(false);
+                          setEditingCompany(null);
+                          setName("");
+                          setPhoneNumber("");
+                          setApiKey("");
+                          setEmail("");
+                          setPassword("");
+                          setMaxAttendants("5");
+                        }}
                         className="rounded-lg border border-gray-300 px-6 py-2.5 text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         Cancelar
@@ -846,13 +956,22 @@ export default function SuperAdminDashboard() {
                           </span>
                         )}
                         {!c.is_super_admin && (
-                          <button
-                            onClick={() => handleDeleteCompany(c.id, c.name)}
-                            className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Deletar empresa"
-                          >
-                            <X size={18} />
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditCompany(c)}
+                              className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar empresa"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => openDeleteModal(c.id, c.name)}
+                              className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Deletar empresa"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1148,6 +1267,26 @@ export default function SuperAdminDashboard() {
           )}
         </div>
       </main>
+
+      <Modal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteCompany}
+        title="Confirmar exclusão"
+        message={`Tem certeza que deseja deletar a empresa "${deleteModal.companyName}"?\n\nIsto irá deletar PERMANENTEMENTE:\n• Todos os atendentes\n• Todos os departamentos\n• Todos os setores\n• Todas as tags\n• Todas as mensagens\n\nEsta ação não pode ser desfeita!`}
+        confirmText="Sim, deletar"
+        cancelText="Cancelar"
+        confirmColor="red"
+        loading={deleting}
+      />
+
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   );
 }
