@@ -593,6 +593,7 @@ export default function AttendantDashboard() {
 
       // ✅ AQUI: JSON enviado para o n8n com nome do atendente
       const webhookPayload = {
+        // ===== dados da mensagem =====
         numero: selectedContact,
         message: formattedMessage,
         tipomessage: rowToInsert.tipomessage || 'conversation',
@@ -602,26 +603,31 @@ export default function AttendantDashboard() {
         caption: formattedCaption,
         idmessage: generatedIdMessage,
         pushname: attendant?.name || company.name,
-        department_id: attendant?.department_id || null,
-        sector_id: attendant?.sector_id || null,
         timestamp: nowIso,
         instancia: instanciaValue,
         apikey_instancia: company.api_key,
       
-        // ✅ quem enviou
+        // ===== quem enviou =====
         sender_type: 'attendant',
         attendant_id: attendant?.id || null,
         attendant_name: attendant?.name || null,
-        attendant_function: attendant?.function || attendant?.role || 'Atendente',
       
-        // ✅ contexto da empresa
-        company_id: company.id,
-        company_name: company.name,
-      
-        // (opcional mas recomendado)
+        // ===== departamento / setor (O QUE VOCÊ QUER) =====
         department_id: attendant?.department_id || null,
         sector_id: attendant?.sector_id || null,
+      
+        // (opcional, mas MUITO BOM pro n8n)
+        department_name:
+          departments.find(d => d.id === attendant?.department_id)?.name || null,
+      
+        sector_name:
+          sectors.find(s => s.id === attendant?.sector_id)?.name || null,
+      
+        // ===== contexto da empresa =====
+        company_id: company.id,
+        company_name: company.name,
       };
+
 
       try {
         const res = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
