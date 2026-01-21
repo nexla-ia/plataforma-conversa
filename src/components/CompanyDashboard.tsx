@@ -690,20 +690,11 @@ export default function CompanyDashboard() {
       const sectorId = existingMessages?.[0]?.sector_id || null;
       const tagId = existingMessages?.[0]?.tag_id || null;
 
-      // ✅ Quem está enviando pelo painel da empresa (atua como atendente)
+      // ✅ Envio pelo painel da empresa: NÃO prefixar texto.
+      // Envie apenas o conteúdo puro e deixe a padronização para o n8n.
       const attendantName = company.name;
-      const fixedSectorName = 'Recepção';
-
-      // Padroniza texto enviado para o cliente (igual padrão do painel do atendente)
-      let formattedMessage = messageData.message || '';
-      if ((messageData.tipomessage || 'conversation') === 'conversation' && formattedMessage) {
-        formattedMessage = `(${fixedSectorName}) - ${attendantName}\n${formattedMessage}`;
-      }
-
-      let formattedCaption = messageData.caption || null;
-      if ((messageData.tipomessage || 'conversation') !== 'conversation' && formattedCaption) {
-        formattedCaption = `(${fixedSectorName}) - ${attendantName}\n${formattedCaption}`;
-      }
+      const rawMessage = messageData.message || '';
+      const rawCaption = messageData.caption || null;
 
       const newMessage = {
         numero: selectedContact,
@@ -719,9 +710,9 @@ export default function CompanyDashboard() {
         sector_id: sectorId,
         tag_id: tagId,
         ...messageData,
-        // garante que o texto/caption salvos já fiquem no padrão
-        message: formattedMessage || messageData.message || '',
-        caption: formattedCaption,
+        // garante que o texto/caption salvos fiquem puros (sem prefixo)
+        message: rawMessage,
+        caption: rawCaption,
       };
 
       const { error } = await supabase
@@ -739,24 +730,20 @@ export default function CompanyDashboard() {
 
         const webhookPayload = {
           numero: selectedContact,
-          message: formattedMessage || '',
+          // ✅ NÃO prefixa texto aqui (no n8n você formata como quiser)
+          message: messageData.message || '',
           tipomessage: messageData.tipomessage || 'conversation',
           base64: messageData.base64 || null,
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
-          caption: formattedCaption,
+          caption: messageData.caption || null,
           idmessage: generatedIdMessage,
           pushname: attendantName,
           timestamp: timestamp,
           instancia: instanciaValue,
           apikey_instancia: company.api_key,
 
-          // ✅ Campos extras (pedido)
-          sender_type: 'attendant',
-          attendant_id: null,
-          attendant_name: attendantName,
-          sector_id: sectorId,
-          sector_name: fixedSectorName,
+          // ✅ Envie só o essencial para roteamento
           department_id: departmentId,
           department_name: departments.find((d) => d.id === departmentId)?.name || null,
           company_id: company.id,
