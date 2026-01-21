@@ -90,15 +90,14 @@ Deno.serve(async (req: Request) => {
 
     console.log("Checking if user is super admin:", callerId);
     const { data: adminData, error: adminError } = await supabaseAdmin
-      .from("companies")
-      .select("id, is_super_admin")
+      .from("super_admins")
+      .select("user_id")
       .eq("user_id", callerId)
-      .eq("is_super_admin", true)
       .maybeSingle();
 
     console.log("Admin check result:", { adminData, adminError });
 
-    if (adminError || !adminData || !adminData.is_super_admin) {
+    if (adminError || !adminData) {
       console.error("User is not a super admin");
       return new Response(
         JSON.stringify({
