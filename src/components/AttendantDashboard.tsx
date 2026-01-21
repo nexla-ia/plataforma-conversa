@@ -716,25 +716,25 @@ export default function AttendantDashboard() {
   const messageGroups = groupMessagesByDate(currentMessages);
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100 overflow-hidden">
+    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {showToast && <Toast message={toastMessage} onClose={() => setShowToast(false)} />}
 
       {/* Fixed Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/60 shadow-sm z-50">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-              <MessageCircle className="w-6 h-6 text-white" />
+      <header className="bg-white border-b border-gray-200 z-50">
+        <div className="px-6 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-sky-500 rounded-lg flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-gray-900 font-bold text-lg tracking-tight">{attendant?.name}</h1>
-              <p className="text-xs text-gray-500 font-medium">{sector ? `Setor: ${sector.name}` : company?.name}</p>
+              <h1 className="text-gray-900 font-semibold text-base">{attendant?.name}</h1>
+              <p className="text-xs text-gray-500">{sector ? `Setor: ${sector.name}` : company?.name}</p>
             </div>
           </div>
 
           <button
             onClick={signOut}
-            className="p-2.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
             title="Sair"
           >
             <LogOut className="w-5 h-5" />
@@ -746,17 +746,17 @@ export default function AttendantDashboard() {
       <div className="flex-1 flex overflow-hidden">
         {/* SIDEBAR */}
         <div
-          className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/90 backdrop-blur-xl border-r-2 border-gray-300/40 flex-col shadow-xl`}
+          className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[320px] bg-white border-r border-gray-200 flex-col`}
         >
-          <div className="px-5 py-4 bg-gradient-to-r from-gray-50/80 to-white/80 backdrop-blur-sm border-b-2 border-gray-300/40">
+          <div className="px-4 py-3 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Pesquisar contato"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white text-gray-900 text-sm pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all placeholder-gray-400 shadow-sm"
+                className="w-full bg-gray-50 text-gray-900 text-sm pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-sky-500 focus:bg-white transition-all placeholder-gray-400"
               />
             </div>
           </div>
@@ -780,14 +780,14 @@ export default function AttendantDashboard() {
                     setSelectedContact(contact.phoneNumber);
                     if (window.innerWidth < 768) setSidebarOpen(false);
                   }}
-                  className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
+                  className={`w-full px-3 py-3 flex items-center gap-3 rounded-lg transition-all ${
                     selectedContact === contact.phoneNumber
-                      ? 'bg-gradient-to-r from-cyan-100 via-blue-100 to-blue-50 border-2 border-cyan-300 shadow-md'
-                      : 'hover:bg-white/60 border-2 border-transparent hover:border-gray-200'
+                      ? 'bg-sky-50 border border-sky-200'
+                      : 'hover:bg-gray-50 border border-transparent'
                   }`}
                 >
-                  <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <User className="w-6 h-6 text-white" />
+                  <div className="w-11 h-11 bg-sky-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <User className="w-5 h-5 text-white" />
                   </div>
 
                   <div className="flex-1 text-left overflow-hidden">
@@ -831,34 +831,34 @@ export default function AttendantDashboard() {
       </div>
 
       {/* CHAT */}
-      <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'} bg-white/50`}>
+      <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'} bg-white`}>
         {selectedContactData ? (
           <>
-            <header className="bg-white/90 backdrop-blur-xl px-6 py-5 flex items-center justify-between shadow-md border-b-2 border-gray-300/40">
+            <header className="bg-white px-6 py-4 flex items-center justify-between border-b border-gray-200">
               <div className="flex items-center gap-3 flex-1">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                  className="md:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
 
-                <div className="w-11 h-11 bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <User className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 bg-sky-500 rounded-lg flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
                 </div>
 
                 <div className="flex-1">
                   <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
                   <p className="text-gray-500 text-xs mb-1">{selectedContactData.phoneNumber}</p>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {selectedContactData.tag_ids?.map((tagId) => {
                       const t = tags.find((x) => x.id === tagId);
                       return t ? (
                         <span
                           key={tagId}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-white border"
-                          style={{ backgroundColor: t.color, borderColor: t.color }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white"
+                          style={{ backgroundColor: t.color }}
                         >
                           <Tag className="w-3 h-3" />
                           {t.name}
@@ -883,13 +883,13 @@ export default function AttendantDashboard() {
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50/80 to-white/80 px-6 py-4">
-              <div className="max-w-5xl mx-auto">
+            <div className="flex-1 overflow-y-auto bg-gray-50 px-6 py-4">
+              <div className="max-w-4xl mx-auto">
                 {Object.entries(messageGroups).map(([date, msgs]) => (
                   <div key={date} className="mb-6">
-                    <div className="flex justify-center mb-5">
-                      <div className="bg-white border-2 border-gray-200 px-4 py-2 rounded-xl shadow-sm">
-                        <p className="text-xs text-gray-700 font-bold tracking-wide">{date}</p>
+                    <div className="flex justify-center mb-4">
+                      <div className="bg-white px-3 py-1 rounded-full border border-gray-200">
+                        <p className="text-xs text-gray-600 font-medium">{date}</p>
                       </div>
                     </div>
 
@@ -906,20 +906,20 @@ export default function AttendantDashboard() {
                             <div
                               className={`max-w-[70%] rounded-2xl ${
                                 isSent
-                                  ? 'bg-gradient-to-br from-cyan-500 via-blue-500 to-blue-600 text-white rounded-br-md shadow-xl border-2 border-blue-400/30'
-                                  : 'bg-white text-gray-900 rounded-bl-md shadow-lg border-2 border-gray-300'
+                                  ? 'bg-sky-500 text-white rounded-br-sm'
+                                  : 'bg-white text-gray-900 rounded-bl-sm border border-gray-200'
                               }`}
                             >
-                              {/* ✅ TOPO DO BALÃO: NOME + DEPARTAMENTO */}
-                              <div className="px-3.5 pt-2 flex items-center justify-between gap-2">
-                                <span className={`text-sm font-bold ${isSent ? 'text-white' : 'text-cyan-600'}`}>
+                              {/* TOPO DO BALÃO: NOME + DEPARTAMENTO */}
+                              <div className="px-3 pt-2 flex items-center justify-between gap-2">
+                                <span className={`text-xs font-semibold ${isSent ? 'text-white' : 'text-gray-900'}`}>
                                   {isSent ? attendant?.name || company?.name : msg.pushname || msg.numero}
                                 </span>
 
                                 {deptName && (
                                   <span
-                                    className={`text-[10px] px-2 py-0.5 rounded-lg font-semibold ${
-                                      isSent ? 'bg-white/30 text-white border border-white/40' : 'bg-cyan-100 text-cyan-700 border border-cyan-200'
+                                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                      isSent ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                                     }`}
                                   >
                                     {deptName}
@@ -961,7 +961,7 @@ export default function AttendantDashboard() {
             </div>
 
             {/* INPUT */}
-            <div className="bg-white/90 backdrop-blur-xl px-6 py-4 border-t-2 border-gray-300/40 shadow-lg">
+            <div className="bg-white px-6 py-4 border-t border-gray-200">
               {filePreview && (
                 <div className="mb-3 px-4 py-3 bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-xl">
                   <div className="flex items-start gap-3">
@@ -1011,7 +1011,7 @@ export default function AttendantDashboard() {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={sending || !!selectedFile}
-                  className="p-3 text-gray-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all disabled:opacity-50 border-2 border-transparent hover:border-cyan-200"
+                  className="p-2.5 text-gray-400 hover:text-sky-500 hover:bg-gray-50 rounded-lg transition-all disabled:opacity-50"
                   title="Enviar imagem"
                 >
                   <ImageIcon className="w-5 h-5" />
@@ -1020,13 +1020,13 @@ export default function AttendantDashboard() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending || !!selectedFile}
-                  className="p-3 text-gray-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all disabled:opacity-50 border-2 border-transparent hover:border-cyan-200"
+                  className="p-2.5 text-gray-400 hover:text-sky-500 hover:bg-gray-50 rounded-lg transition-all disabled:opacity-50"
                   title="Enviar arquivo"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
 
-                <div className="flex-1 bg-white rounded-2xl flex items-center px-5 py-3 border-2 border-gray-300 focus-within:border-cyan-400 focus-within:shadow-md transition-all">
+                <div className="flex-1 bg-gray-50 rounded-lg flex items-center px-4 py-2.5 border border-gray-200 focus-within:border-sky-500 focus-within:bg-white transition-all">
                   <input
                     type="text"
                     value={messageText}
@@ -1046,7 +1046,7 @@ export default function AttendantDashboard() {
                 <button
                   onClick={handleSendMessage}
                   disabled={(!messageText.trim() && !selectedFile) || sending}
-                  className="p-3.5 bg-gradient-to-br from-cyan-500 via-blue-500 to-blue-600 hover:from-cyan-600 hover:via-blue-600 hover:to-blue-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl"
+                  className="p-3 bg-sky-500 hover:bg-sky-600 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Enviar mensagem"
                 >
                   {sending ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Send className="w-5 h-5 text-white" />}
