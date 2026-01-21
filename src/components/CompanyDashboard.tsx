@@ -52,6 +52,18 @@ interface TagItem {
   color: string;
 }
 
+function normalizePhone(input?: string | null): string {
+  if (!input) return '';
+  const noJid = input.includes('@') ? input.split('@')[0] : input;
+  return noJid.replace(/\D/g, '');
+}
+
+function safeISO(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
 type TabType = 'mensagens' | 'departamentos' | 'setores' | 'atendentes' | 'tags';
 
 export default function CompanyDashboard() {
@@ -347,7 +359,7 @@ export default function CompanyDashboard() {
       }
 
       // Buscar tags atuais do contato para verificar se houve mudança
-      const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
+      const currentContact = contactsDB.find(c => normalizePhone(c.phone_number) === normalizePhone(selectedContact));
       const currentTags = currentContact?.tag_ids || [];
 
       const tagsChanged =
@@ -360,24 +372,11 @@ export default function CompanyDashboard() {
         return;
       }
 
-      // Buscar o ID do contato no banco
-      const { data: contactData, error: contactFetchError } = await supabase
-        .from('contacts')
-        .select('id')
-        .eq('company_id', company.id)
-        .eq('phone_number', selectedContact)
-        .maybeSingle();
-
-      if (contactFetchError) {
-        console.error('Erro ao buscar contato:', contactFetchError);
-        throw new Error('Erro ao buscar contato');
-      }
-
-      if (!contactData) {
+      // ✅ Usa o contato já carregado do estado (evita mismatch por @s.whatsapp.net)
+      if (!currentContact?.id) {
         throw new Error('Contato não encontrado');
       }
-
-      const contactId = contactData.id;
+      const contactId = currentContact.id;
 
       // Atualizar a tabela contacts
       if (Object.keys(updates).length > 0) {
@@ -568,14 +567,11 @@ export default function CompanyDashboard() {
   };
 
   const getContactId = (msg: Message): string => {
-    return msg.numero || msg.sender || msg.number || 'Desconhecido';
+    return normalizePhone(msg.numero || msg.sender || msg.number || '');
   };
 
   const getPhoneNumber = (contactId: string): string => {
-    if (contactId.includes('@')) {
-      return contactId.split('@')[0];
-    }
-    return contactId;
+    return normalizePhone(contactId);
   };
 
   const getContactName = (msg: Message): string => {
@@ -587,14 +583,15 @@ export default function CompanyDashboard() {
 
     messages.forEach((msg) => {
       const contactId = getContactId(msg);
+      if (!contactId) return;
 
       if (!contactsMap[contactId]) {
         // Buscar informações do contato na tabela contacts
-        const contactDB = contactsDB.find(c => c.phone_number === contactId);
+        const contactDB = contactsDB.find(c => normalizePhone(c.phone_number) === contactId);
 
         contactsMap[contactId] = {
           phoneNumber: contactId,
-          name: getContactName(msg),
+          name: contactDB?.name || getContactName(msg),
           lastMessage: '',
           lastMessageTime: '',
           unreadCount: 0,
@@ -619,7 +616,9 @@ export default function CompanyDashboard() {
 
       const lastMsgTime = getMessageTimestamp(lastMsg);
       contact.lastMessageTime = lastMsgTime > 0 ? new Date(lastMsgTime).toISOString() : '';
-      contact.name = getContactName(lastMsg);
+      // Mantém nome do banco se existir
+      const dbName = contactsDB.find(c => normalizePhone(c.phone_number) === contact.phoneNumber)?.name;
+      contact.name = dbName || getContactName(lastMsg);
 
       return contact;
     });
@@ -691,11 +690,26 @@ export default function CompanyDashboard() {
       const sectorId = existingMessages?.[0]?.sector_id || null;
       const tagId = existingMessages?.[0]?.tag_id || null;
 
+      // ✅ Quem está enviando pelo painel da empresa (atua como atendente)
+      const attendantName = company.name;
+      const fixedSectorName = 'Recepção';
+
+      // Padroniza texto enviado para o cliente (igual padrão do painel do atendente)
+      let formattedMessage = messageData.message || '';
+      if ((messageData.tipomessage || 'conversation') === 'conversation' && formattedMessage) {
+        formattedMessage = `(${fixedSectorName}) - ${attendantName}\n${formattedMessage}`;
+      }
+
+      let formattedCaption = messageData.caption || null;
+      if ((messageData.tipomessage || 'conversation') !== 'conversation' && formattedCaption) {
+        formattedCaption = `(${fixedSectorName}) - ${attendantName}\n${formattedCaption}`;
+      }
+
       const newMessage = {
         numero: selectedContact,
         sender: selectedContact,
         'minha?': 'true',
-        pushname: company.name,
+        pushname: attendantName,
         apikey_instancia: company.api_key,
         date_time: new Date().toISOString(),
         instancia: instanciaValue,
@@ -705,6 +719,9 @@ export default function CompanyDashboard() {
         sector_id: sectorId,
         tag_id: tagId,
         ...messageData,
+        // garante que o texto/caption salvos já fiquem no padrão
+        message: formattedMessage || messageData.message || '',
+        caption: formattedCaption,
       };
 
       const { error } = await supabase
@@ -722,17 +739,28 @@ export default function CompanyDashboard() {
 
         const webhookPayload = {
           numero: selectedContact,
-          message: messageData.message || '',
+          message: formattedMessage || '',
           tipomessage: messageData.tipomessage || 'conversation',
           base64: messageData.base64 || null,
           urlimagem: messageData.urlimagem || null,
           urlpdf: messageData.urlpdf || null,
-          caption: messageData.caption || null,
+          caption: formattedCaption,
           idmessage: generatedIdMessage,
-          pushname: company.name,
+          pushname: attendantName,
           timestamp: timestamp,
           instancia: instanciaValue,
           apikey_instancia: company.api_key,
+
+          // ✅ Campos extras (pedido)
+          sender_type: 'attendant',
+          attendant_id: null,
+          attendant_name: attendantName,
+          sector_id: sectorId,
+          sector_name: fixedSectorName,
+          department_id: departmentId,
+          department_name: departments.find((d) => d.id === departmentId)?.name || null,
+          company_id: company.id,
+          company_name: company.name,
         };
 
         const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
@@ -852,7 +880,7 @@ export default function CompanyDashboard() {
       <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <Loader2 className="w-10 h-10 text-teal-500 animate-spin mx-auto mb-3" />
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin mx-auto mb-3" />
             <p className="text-gray-600 font-medium">Carregando mensagens...</p>
           </div>
         </div>
@@ -890,7 +918,7 @@ export default function CompanyDashboard() {
       >
         <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -900,7 +928,7 @@ export default function CompanyDashboard() {
           </div>
           <button
             onClick={signOut}
-            className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
+            className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
             title="Sair"
           >
             <LogOut className="w-4 h-4" />
@@ -913,7 +941,7 @@ export default function CompanyDashboard() {
               onClick={() => setActiveTab('mensagens')}
               className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'mensagens'
-                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
               }`}
             >
@@ -924,7 +952,7 @@ export default function CompanyDashboard() {
               onClick={() => setActiveTab('departamentos')}
               className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'departamentos'
-                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
               }`}
             >
@@ -935,7 +963,7 @@ export default function CompanyDashboard() {
               onClick={() => setActiveTab('setores')}
               className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'setores'
-                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
               }`}
             >
@@ -946,7 +974,7 @@ export default function CompanyDashboard() {
               onClick={() => setActiveTab('atendentes')}
               className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'atendentes'
-                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
               }`}
             >
@@ -957,7 +985,7 @@ export default function CompanyDashboard() {
               onClick={() => setActiveTab('tags')}
               className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${
                 activeTab === 'tags'
-                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md'
                   : 'bg-white/50 text-gray-600 hover:bg-white/70'
               }`}
             >
@@ -983,7 +1011,7 @@ export default function CompanyDashboard() {
               placeholder="Pesquisar contato"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/60 text-gray-900 text-sm pl-12 pr-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
+              className="w-full bg-white/60 text-gray-900 text-sm pl-12 pr-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all placeholder-gray-400"
             />
           </div>
         </div>
@@ -993,8 +1021,8 @@ export default function CompanyDashboard() {
         <div className="flex-1 overflow-y-auto bg-transparent">
           {filteredContacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full p-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-teal-100 to-teal-200 rounded-full flex items-center justify-center mb-4">
-                <MessageSquare className="w-10 h-10 text-teal-500" />
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4">
+                <MessageSquare className="w-10 h-10 text-blue-500" />
               </div>
               <p className="text-gray-500 text-sm text-center font-medium">
                 {searchTerm ? 'Nenhum contato encontrado' : 'Nenhuma conversa ainda'}
@@ -1013,11 +1041,11 @@ export default function CompanyDashboard() {
                   }}
                   className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
                     selectedContact === contact.phoneNumber
-                      ? 'bg-gradient-to-r from-teal-50 to-teal-100/50 shadow-sm'
+                      ? 'bg-gradient-to-r from-blue-50 to-blue-100/50 shadow-sm'
                       : 'hover:bg-white/40'
                   }`}
                 >
-                  <div className="w-12 h-12 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
                     <User className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1 text-left overflow-hidden">
@@ -1030,7 +1058,7 @@ export default function CompanyDashboard() {
                     <div className="flex items-center justify-between">
                       <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
                       {contact.unreadCount > 0 && (
-                        <div className="w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center ml-2">
+                        <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
                           <span className="text-[10px] font-bold text-white">{contact.unreadCount}</span>
                         </div>
                       )}
@@ -1051,11 +1079,11 @@ export default function CompanyDashboard() {
               <div className="flex items-center gap-3 flex-1">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden p-2 text-gray-500 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all"
+                  className="md:hidden p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
                 >
                   <Menu className="w-5 h-5" />
                 </button>
-                <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center shadow-md">
+                <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
                   <User className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
@@ -1069,7 +1097,7 @@ export default function CompanyDashboard() {
                       </span>
                     )}
                     {selectedContactData.sector_id && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
                         <FolderTree className="w-3 h-3" />
                         {sectors.find(s => s.id === selectedContactData.sector_id)?.name || 'Setor'}
                       </span>
@@ -1097,13 +1125,13 @@ export default function CompanyDashboard() {
               <button
                 onClick={() => {
                   // Carregar informações atuais do contato
-                  const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
+                  const currentContact = contactsDB.find(c => normalizePhone(c.phone_number) === normalizePhone(selectedContact));
                   setSelectedDepartment(currentContact?.department_id || '');
                   setSelectedSector(currentContact?.sector_id || '');
                   setSelectedTags(currentContact?.tag_ids || []);
                   setShowOptionsMenu(true);
                 }}
-                className="p-2.5 text-gray-400 hover:text-teal-600 hover:bg-gray-100/50 rounded-xl transition-all relative z-10"
+                className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all relative z-10"
                 title="Mais opções"
               >
                 <MoreVertical className="w-5 h-5" />
@@ -1122,6 +1150,8 @@ export default function CompanyDashboard() {
                     <div className="space-y-3">
                       {msgs.map((msg) => {
                         const isSentMessage = msg['minha?'] === 'true';
+                        const senderLabel = isSentMessage ? (msg.pushname || company?.name || 'Atendente') : (msg.pushname || getPhoneNumber(getContactId(msg)));
+                        const deptName = msg.department_id ? (departments.find((d) => d.id === msg.department_id)?.name || null) : null;
                         const base64Type = msg.base64 ? detectBase64Type(msg.base64) : null;
                         const tipoFromField = getMessageTypeFromTipomessage(msg.tipomessage);
                         const hasBase64Content = msg.base64 && base64Type;
@@ -1134,10 +1164,29 @@ export default function CompanyDashboard() {
                             <div
                               className={`max-w-[70%] rounded-2xl ${
                                 isSentMessage
-                                  ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-br-md shadow-lg'
+                                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-lg'
                                   : 'bg-white/80 backdrop-blur-sm text-gray-900 rounded-bl-md shadow-md border border-gray-200/50'
                               }`}
                             >
+                              {/* ✅ TOPO DO BALÃO: NOME + (DEPARTAMENTO/SETOR) */}
+                              <div className="px-3.5 pt-2 flex items-center justify-between gap-2">
+                                <span className={`text-sm font-semibold ${isSentMessage ? 'text-white' : 'text-blue-600'}`}>
+                                  {senderLabel}
+                                </span>
+
+                                <div className="flex items-center gap-2">
+                                  {deptName && (
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${isSentMessage ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                                      {deptName}
+                                    </span>
+                                  )}
+                                  {/* Setor padronizado como Recepção */}
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isSentMessage ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                                    Recepção
+                                  </span>
+                                </div>
+                              </div>
+
                               {msg.urlimagem && !hasBase64Content && (
                                 <div className="p-1">
                                   <img
@@ -1171,12 +1220,12 @@ export default function CompanyDashboard() {
                                 base64Type !== 'image' && tipoFromField !== 'image' && (
                                 <div className="p-3">
                                   <div className={`flex items-center gap-3 p-3 rounded-xl ${
-                                    isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
+                                    isSentMessage ? 'bg-blue-600' : 'bg-gray-50'
                                   }`}>
                                     <button
                                       onClick={() => handleAudioPlay(msg.id, msg.base64!)}
                                       className={`p-2 rounded-full ${
-                                        isSentMessage ? 'bg-teal-700 hover:bg-teal-800' : 'bg-teal-500 hover:bg-teal-600'
+                                        isSentMessage ? 'bg-blue-700 hover:bg-blue-800' : 'bg-blue-500 hover:bg-blue-600'
                                       } transition`}
                                     >
                                       {playingAudio === msg.id ? (
@@ -1189,11 +1238,11 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium">
                                         {msg.message || 'Áudio'}
                                       </p>
-                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-blue-100' : 'text-gray-500'}`}>
                                         Clique para {playingAudio === msg.id ? 'pausar' : 'reproduzir'}
                                       </p>
                                     </div>
-                                    <Mic className={`w-5 h-5 ${isSentMessage ? 'text-teal-100' : 'text-teal-500'}`} />
+                                    <Mic className={`w-5 h-5 ${isSentMessage ? 'text-blue-100' : 'text-blue-500'}`} />
                                   </div>
                                 </div>
                               )}
@@ -1205,7 +1254,7 @@ export default function CompanyDashboard() {
                                   <button
                                     onClick={() => downloadBase64File(msg.base64!, msg.message || 'documento.pdf')}
                                     className={`flex items-center gap-2 p-2.5 rounded-xl w-full ${
-                                      isSentMessage ? 'bg-teal-600 hover:bg-teal-700' : 'bg-gray-50 hover:bg-gray-100'
+                                      isSentMessage ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-50 hover:bg-gray-100'
                                     } transition`}
                                   >
                                     <FileText className="w-8 h-8 flex-shrink-0" />
@@ -1213,7 +1262,7 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-blue-100' : 'text-gray-500'}`}>
                                         Clique para baixar
                                       </p>
                                     </div>
@@ -1229,7 +1278,7 @@ export default function CompanyDashboard() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={`flex items-center gap-2 p-2.5 rounded-xl ${
-                                      isSentMessage ? 'bg-teal-600' : 'bg-gray-50'
+                                      isSentMessage ? 'bg-blue-600' : 'bg-gray-50'
                                     } hover:opacity-90 transition`}
                                   >
                                     <FileText className="w-8 h-8 flex-shrink-0" />
@@ -1237,7 +1286,7 @@ export default function CompanyDashboard() {
                                       <p className="text-sm font-medium truncate">
                                         {msg.message || 'Documento'}
                                       </p>
-                                      <p className={`text-[11px] ${isSentMessage ? 'text-teal-100' : 'text-gray-500'}`}>
+                                      <p className={`text-[11px] ${isSentMessage ? 'text-blue-100' : 'text-gray-500'}`}>
                                         Clique para abrir
                                       </p>
                                     </div>
@@ -1254,11 +1303,11 @@ export default function CompanyDashboard() {
                               )}
 
                               <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
-                                <span className={`text-[10px] ${isSentMessage ? 'text-teal-100' : 'text-gray-400'}`}>
+                                <span className={`text-[10px] ${isSentMessage ? 'text-blue-100' : 'text-gray-400'}`}>
                                   {formatTime(msg)}
                                 </span>
                                 {isSentMessage && (
-                                  <CheckCheck className="w-3.5 h-3.5 text-teal-50" />
+                                  <CheckCheck className="w-3.5 h-3.5 text-blue-50" />
                                 )}
                               </div>
                             </div>
@@ -1274,11 +1323,11 @@ export default function CompanyDashboard() {
 
             <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
               {filePreview && (
-                <div className="mb-3 px-4 py-3 bg-teal-50/80 backdrop-blur-sm border border-teal-200/50 rounded-xl">
+                <div className="mb-3 px-4 py-3 bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-xl">
                   <div className="flex items-start gap-3">
                     <img src={filePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
                     <div className="flex-1">
-                      <p className="text-xs text-teal-600 mb-1 font-medium">Imagem selecionada</p>
+                      <p className="text-xs text-blue-600 mb-1 font-medium">Imagem selecionada</p>
                       <p className="text-xs text-gray-600">{selectedFile?.name}</p>
                       <button
                         onClick={clearSelectedFile}
@@ -1298,7 +1347,7 @@ export default function CompanyDashboard() {
                     value={imageCaption}
                     onChange={(e) => setImageCaption(e.target.value)}
                     placeholder="Legenda para imagem (opcional)"
-                    className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all placeholder-gray-400"
+                    className="w-full px-4 py-2.5 text-sm bg-white/60 border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all placeholder-gray-400"
                   />
                 </div>
               )}
@@ -1340,7 +1389,7 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={sending || !!selectedFile}
-                  className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
+                  className="p-3 text-gray-400 hover:text-blue-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar imagem"
                 >
                   <ImageIcon className="w-5 h-5" />
@@ -1348,13 +1397,13 @@ export default function CompanyDashboard() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending || !!selectedFile}
-                  className="p-3 text-gray-400 hover:text-teal-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
+                  className="p-3 text-gray-400 hover:text-blue-500 hover:bg-white/60 rounded-xl transition-all disabled:opacity-50"
                   title="Enviar arquivo"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
 
-                <div className="flex-1 bg-white/60 rounded-2xl flex items-center px-5 py-3 border border-gray-200/50 focus-within:border-teal-400 focus-within:bg-white transition-all">
+                <div className="flex-1 bg-white/60 rounded-2xl flex items-center px-5 py-3 border border-gray-200/50 focus-within:border-blue-400 focus-within:bg-white transition-all">
                   <input
                     type="text"
                     value={messageText}
@@ -1370,7 +1419,7 @@ export default function CompanyDashboard() {
                     className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 focus:outline-none disabled:opacity-50 text-sm"
                   />
                   <button
-                    className="p-1.5 text-gray-400 hover:text-teal-500 transition-all ml-2"
+                    className="p-1.5 text-gray-400 hover:text-blue-500 transition-all ml-2"
                     title="Emoji"
                   >
                     <Smile className="w-5 h-5" />
@@ -1380,7 +1429,7 @@ export default function CompanyDashboard() {
                 <button
                   onClick={handleSendMessage}
                   disabled={(!messageText.trim() && !selectedFile) || sending}
-                  className="p-3.5 bg-gradient-to-br from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  className="p-3.5 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                   title="Enviar mensagem"
                 >
                   {sending || uploadingFile ? (
@@ -1401,8 +1450,8 @@ export default function CompanyDashboard() {
         ) : activeTab === 'mensagens' ? (
           <div className="flex-1 flex items-center justify-center bg-transparent">
             <div className="text-center p-8">
-              <div className="w-32 h-32 bg-gradient-to-br from-teal-100 to-teal-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <MessageSquare className="w-16 h-16 text-teal-500" />
+              <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-blue-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <MessageSquare className="w-16 h-16 text-blue-500" />
               </div>
               <h3 className="text-2xl font-bold text-gray-700 mb-3 tracking-tight">Selecione uma conversa para começar</h3>
               <p className="text-gray-500 text-sm">Escolha um contato na lista à esquerda</p>
@@ -1478,13 +1527,13 @@ export default function CompanyDashboard() {
             <div className="p-6 space-y-6">
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <Briefcase className="w-4 h-4 text-teal-600" />
+                  <Briefcase className="w-4 h-4 text-blue-600" />
                   Departamento
                 </label>
                 <select
                   value={selectedDepartment}
                   onChange={(e) => setSelectedDepartment(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
                 >
                   <option value="">Selecione um departamento</option>
                   {departments.map((dept) => (
@@ -1497,13 +1546,13 @@ export default function CompanyDashboard() {
 
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <FolderTree className="w-4 h-4 text-teal-600" />
+                  <FolderTree className="w-4 h-4 text-blue-600" />
                   Setor
                 </label>
                 <select
                   value={selectedSector}
                   onChange={(e) => setSelectedSector(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white transition-all text-gray-900"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white transition-all text-gray-900"
                 >
                   <option value="">Selecione um setor</option>
                   {sectors.map((sec) => (
@@ -1516,7 +1565,7 @@ export default function CompanyDashboard() {
 
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
-                  <Tag className="w-4 h-4 text-teal-600" />
+                  <Tag className="w-4 h-4 text-blue-600" />
                   Tags (máx. 5)
                 </label>
                 <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 border border-gray-200 rounded-xl p-3">
@@ -1543,7 +1592,7 @@ export default function CompanyDashboard() {
                               setSelectedTags(selectedTags.filter(id => id !== tag.id));
                             }
                           }}
-                          className="w-5 h-5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                          className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                           disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
                         />
                         <span
@@ -1573,7 +1622,7 @@ export default function CompanyDashboard() {
                 </button>
                 <button
                   onClick={handleUpdateContactInfo}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
                 >
                   Salvar
                 </button>
