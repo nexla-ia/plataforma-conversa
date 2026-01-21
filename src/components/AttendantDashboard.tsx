@@ -135,8 +135,13 @@ export default function AttendantDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'end'
+      });
+    });
   };
 
   useEffect(() => {
@@ -178,9 +183,20 @@ export default function AttendantDashboard() {
   }, [attendant?.id, company?.id, company?.api_key]);
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        scrollToBottom(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (selectedContact) {
+      scrollToBottom(false);
+    }
+  }, [selectedContact]);
 
   // ✅ FILTRO ESTRITO: NÃO deixa passar NULL
   function matchAttendantScope(item: { department_id?: string | null; sector_id?: string | null }) {
@@ -782,7 +798,7 @@ export default function AttendantDashboard() {
                   }}
                   className={`w-full px-3 py-3 flex items-center gap-3 rounded-lg transition-all ${
                     selectedContact === contact.phoneNumber
-                      ? 'bg-sky-50 border border-sky-200'
+                      ? 'bg-sky-50 border border-sky-400'
                       : 'hover:bg-gray-50 border border-transparent'
                   }`}
                 >

@@ -99,8 +99,13 @@ export default function CompanyDashboard() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'end'
+      });
+    });
   };
 
   const detectBase64Type = (base64: string): 'image' | 'audio' | 'document' | null => {
@@ -656,17 +661,16 @@ export default function CompanyDashboard() {
 
   useEffect(() => {
     if (selectedContact) {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      scrollToBottom(false);
     }
   }, [selectedContact]);
 
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      const timer = setTimeout(() => {
+        scrollToBottom(true);
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [messages.length]);
 
@@ -1032,7 +1036,7 @@ export default function CompanyDashboard() {
                   }}
                   className={`w-full px-3 py-3 flex items-center gap-3 rounded-lg transition-all ${
                     selectedContact === contact.phoneNumber
-                      ? 'bg-sky-50 border border-sky-200'
+                      ? 'bg-sky-50 border border-sky-400'
                       : 'hover:bg-gray-50 border border-transparent'
                   }`}
                 >
@@ -1046,7 +1050,7 @@ export default function CompanyDashboard() {
                         {formatTime(contact.lastMessageTime)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-1">
                       <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
                       {contact.unreadCount > 0 && (
                         <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center ml-2">
@@ -1054,6 +1058,23 @@ export default function CompanyDashboard() {
                         </div>
                       )}
                     </div>
+                    {contact.tag_ids && contact.tag_ids.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {contact.tag_ids.map((tagId) => {
+                          const tag = tags.find(t => t.id === tagId);
+                          return tag ? (
+                            <span
+                              key={tagId}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              <Tag className="w-2.5 h-2.5" />
+                              {tag.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
                   </div>
                 </button>
               ))}
