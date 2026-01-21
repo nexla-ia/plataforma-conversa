@@ -730,7 +730,6 @@ export default function CompanyDashboard() {
 
         const webhookPayload = {
           numero: selectedContact,
-          // ✅ NÃO prefixa texto aqui (no n8n você formata como quiser)
           message: messageData.message || '',
           tipomessage: messageData.tipomessage || 'conversation',
           base64: messageData.base64 || null,
@@ -738,17 +737,16 @@ export default function CompanyDashboard() {
           urlpdf: messageData.urlpdf || null,
           caption: messageData.caption || null,
           idmessage: generatedIdMessage,
-          pushname: attendantName,
-          timestamp: timestamp,
+          pushname: company.name,
+        
+          // 🔹 FORÇADO
+          department_name: 'Recepção',
+        
+          timestamp: new Date().toISOString(),
           instancia: instanciaValue,
           apikey_instancia: company.api_key,
-
-          // ✅ Envie só o essencial para roteamento
-          department_id: departmentId,
-          department_name: departments.find((d) => d.id === departmentId)?.name || null,
-          company_id: company.id,
-          company_name: company.name,
         };
+
 
         const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
           method: 'POST',
