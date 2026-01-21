@@ -232,18 +232,37 @@ export default function SuperAdminDashboard() {
   const loadCompanies = async () => {
     setErrorMsg(null);
 
-    const { data, error } = await supabase
-      .from("companies")
-      .select("id,api_key,name,phone_number,email,user_id,is_super_admin,created_at")
-      .order("created_at", { ascending: false });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setErrorMsg("No active session");
+        setCompanies([]);
+        return;
+      }
 
-    if (error) {
-      setErrorMsg(error.message);
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/list-companies`;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setErrorMsg(errorData.error || 'Failed to load companies');
+        setCompanies([]);
+        return;
+      }
+
+      const result = await response.json();
+      setCompanies(result.data || []);
+    } catch (error) {
+      console.error('Error loading companies:', error);
+      setErrorMsg(error instanceof Error ? error.message : 'Unknown error');
       setCompanies([]);
-      return;
     }
-
-    setCompanies((data as Company[]) || []);
   };
 
   const loadMessages = async () => {
@@ -490,18 +509,32 @@ export default function SuperAdminDashboard() {
 
     setCreating(true);
     try {
-      const { error } = await supabase
-        .from('companies')
-        .update({
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("No active session");
+      }
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-company`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: editingCompany,
           name: name.trim(),
           phone_number: phone_number.trim(),
           api_key: api_key.trim(),
           max_attendants: parseInt(maxAttendants) || 5,
           payment_notification_day: parseInt(paymentNotificationDay) || 5,
-        })
-        .eq('id', editingCompany);
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update company');
+      }
 
       setShowForm(false);
       setEditingCompany(null);
