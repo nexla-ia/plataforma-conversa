@@ -728,6 +728,8 @@ export default function CompanyDashboard() {
       try {
         const timestamp = new Date().toISOString();
 
+        const timestamp = new Date().toISOString();
+
         const webhookPayload = {
           numero: selectedContact,
           message: messageData.message || '',
@@ -740,12 +742,13 @@ export default function CompanyDashboard() {
           pushname: company.name,
         
           // 🔹 FORÇADO
-          department_name: 'Recepção',
+          sector_name: 'Recepção',
         
-          timestamp: new Date().toISOString(),
+          timestamp,
           instancia: instanciaValue,
           apikey_instancia: company.api_key,
         };
+
 
 
         const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
