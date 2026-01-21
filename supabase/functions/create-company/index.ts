@@ -19,10 +19,7 @@ type Payload = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
@@ -39,21 +36,21 @@ Deno.serve(async (req: Request) => {
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
       console.error("Missing environment variables");
-      return new Response(
-        JSON.stringify({ error: "Server configuration error" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    // =========================================================
+    // PARTE 2 — Autenticação correta (pega usuário do token)
+    // =========================================================
     const authHeader = req.headers.get("Authorization");
     console.log("Auth header received:", authHeader ? "present" : "missing");
 
-    if (!authHeader) {
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
       return new Response(
-        JSON.stringify({ error: "Missing Authorization header" }),
+        JSON.stringify({ error: "Missing or invalid Authorization header" }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -61,21 +58,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Cliente "do usuário" (usa ANON e o Bearer do request)
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
+      global: { headers: { Authorization: authHeader } },
     });
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser();
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
 
-    if (userError || !user) {
+    if (userError || !userData?.user) {
       console.error("Failed to get user:", userError);
       return new Response(
-        JSON.stringify({ error: "Unauthorized", details: userError?.message }),
+        JSON.stringify({
+          error: "Unauthorized",
+          details: userError?.message || "Invalid token",
+        }),
         {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -83,22 +79,26 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const callerId = user.id;
+    const callerId = userData.user.id;
     console.log("User authenticated:", callerId);
 
+    // Cliente admin (service role)
     const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // =========================================================
+    // PARTE 3 — Verificação de super admin (tabela super_admins)
+    // =========================================================
     console.log("Checking if user is super admin:", callerId);
+
     const { data: adminData, error: adminError } = await supabaseAdmin
-      .from("companies")
-      .select("id, is_super_admin")
+      .from("super_admins")
+      .select("user_id")
       .eq("user_id", callerId)
-      .eq("is_super_admin", true)
       .maybeSingle();
 
     console.log("Admin check result:", { adminData, adminError });
 
-    if (adminError || !adminData || !adminData.is_super_admin) {
+    if (adminError || !adminData) {
       console.error("User is not a super admin");
       return new Response(
         JSON.stringify({
@@ -126,7 +126,15 @@ Deno.serve(async (req: Request) => {
     const max_attendants = Number(body.max_attendants ?? 5);
     const payment_notification_day = Number(body.payment_notification_day ?? 5);
 
-    console.log("Parsed fields:", { email, name, phone_number, api_key, max_attendants, payment_notification_day, passwordLength: password.length });
+    console.log("Parsed fields:", {
+      email,
+      name,
+      phone_number,
+      api_key,
+      max_attendants,
+      payment_notification_day,
+      passwordLength: password.length,
+    });
 
     if (!email || !password || !name || !phone_number || !api_key) {
       console.error("Missing required fields");
@@ -142,11 +150,12 @@ Deno.serve(async (req: Request) => {
     }
 
     console.log("Creating user in auth.users...");
-    const { data: newUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
+    const { data: newUser, error: createUserError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
 
     console.log("User creation result:", { newUser, createUserError });
 
@@ -178,11 +187,10 @@ Deno.serve(async (req: Request) => {
       max_attendants,
       payment_notification_day,
     };
+
     console.log("Company data to insert:", JSON.stringify(companyData));
 
-    const { error: insertError } = await supabaseAdmin
-      .from("companies")
-      .insert(companyData);
+    const { error: insertError } = await supabaseAdmin.from("companies").insert(companyData);
 
     console.log("Company insertion result:", { insertError });
 
@@ -219,12 +227,12 @@ Deno.serve(async (req: Request) => {
     );
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    const errorStack = e instanceof Error ? e.stack : '';
+    const errorStack = e instanceof Error ? e.stack : "";
 
     console.error("Error in create-company:", {
       message: errorMessage,
       stack: errorStack,
-      error: e
+      error: e,
     });
 
     return new Response(
