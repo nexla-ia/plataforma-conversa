@@ -1,7 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, LogOut, Send, User, Search, Menu, CheckCheck, Tag, MoreVertical, X, Image as ImageIcon, Paperclip, FileText, Loader2 } from 'lucide-react';
+import {
+  MessageCircle,
+  LogOut,
+  Send,
+  User,
+  Search,
+  Menu,
+  CheckCheck,
+  Tag,
+  MoreVertical,
+  X,
+  Image as ImageIcon,
+  Paperclip,
+  FileText,
+  Loader2,
+} from 'lucide-react';
 import Toast from './Toast';
 
 interface Message {
@@ -14,18 +29,26 @@ interface Message {
   timestamp: string | null;
   created_at: string;
   apikey_instancia?: string;
-  sector_id?: string;
-  department_id?: string;
-  tag_id?: string;
-  date_time?: string;
-  'minha?'?: string;
+  sector_id?: string | null;
+  department_id?: string | null;
+  tag_id?: string | null;
+  date_time?: string | null;
+  instancia?: string | null;
+  idmessage?: string | null;
+  mimetype?: string | null;
+  base64?: string | null;
+  urlpdf?: string | null;
+  urlimagem?: string | null;
+  caption?: string | null;
+  company_id?: string | null;
+  'minha?'?: string | null;
 }
 
 interface Contact {
-  phoneNumber: string;
+  phoneNumber: string; // normalizado (somente dígitos)
   name: string;
   lastMessage: string;
-  lastMessageTime: string;
+  lastMessageTime: string; // ISO
   unreadCount: number;
   messages: Message[];
   department_id?: string;
@@ -37,7 +60,7 @@ interface Contact {
 interface ContactDB {
   id: string;
   company_id: string;
-  phone_number: string;
+  phone_number: string; // pode vir com @s.whatsapp.net
   name: string;
   department_id: string | null;
   sector_id: string | null;
@@ -65,135 +88,120 @@ interface TagItem {
   color: string;
 }
 
+function normalizePhone(input?: string | null): string {
+  if (!input) return '';
+  const noJid = input.includes('@') ? input.split('@')[0] : input;
+  return noJid.replace(/\D/g, '');
+}
+
+function safeISO(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
 export default function AttendantDashboard() {
   const { attendant, company, signOut } = useAuth();
-  console.log('🔄 AttendantDashboard renderizou. Attendant:', attendant?.name, 'Company:', company?.name);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [contactsDB, setContactsDB] = useState<ContactDB[]>([]);
+
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
+
   const [sector, setSector] = useState<Sector | null>(null);
-  const [selectedContact, setSelectedContact] = useState<string | null>(null);
+
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [tags, setTags] = useState<TagItem[]>([]);
+
+  const [selectedContact, setSelectedContact] = useState<string | null>(null); // phone normalizado
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
   const [showTagsModal, setShowTagsModal] = useState(false);
-  const [modalContactPhone, setModalContactPhone] = useState<string | null>(null);
-  const [tags, setTags] = useState<TagItem[]>([]);
+  const [modalContactPhone, setModalContactPhone] = useState<string | null>(null); // phone normalizado
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+
   const [imageCaption, setImageCaption] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-
-
-  useEffect(() => {
-    console.log('=== USEEFFECT PRINCIPAL ===');
-    console.log('Attendant existe?', !!attendant);
-    console.log('Company existe?', !!company);
-    console.log('Company API Key:', company?.api_key);
-
-    if (attendant && company) {
-      console.log('✓ Attendant e Company carregados. Iniciando fetch...');
-      fetchSector();
-      fetchMessages();
-      fetchContacts();
-      fetchDepartments();
-      fetchSectors();
-      fetchTags();
-      subscribeToMessages();
-    } else {
-      console.log('✗ Attendant ou Company não carregados ainda');
-      setLoading(false);
-    }
-  }, [attendant, company]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchContacts = async () => {
-    if (!company?.id) {
-      console.log('fetchContacts: company.id não existe');
+  useEffect(() => {
+    if (!attendant || !company) {
+      setLoading(false);
       return;
     }
 
-    try {
-      console.log('=== FETCH CONTACTS ===');
-      console.log('Buscando contatos para company_id:', company.id);
+    // logs úteis (sem spam)
+    console.log('AttendantDashboard init:', {
+      attendant: attendant?.name,
+      attendant_id: attendant?.id,
+      dept: attendant?.department_id,
+      sector: attendant?.sector_id,
+      company: company?.name,
+      company_id: company?.id,
+      api_key: company?.api_key,
+    });
 
-      // Buscar TODOS os contatos da empresa
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('company_id', company.id)
-        .order('last_message_time', { ascending: false });
+    let unsub: (() => void) | undefined;
 
-      if (error) {
-        console.error('Erro ao buscar contatos:', error);
-        return;
-      }
+    (async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchSector(),
+        fetchDepartments(),
+        fetchSectors(),
+        fetchTags(),
+        fetchContacts(),
+        fetchMessages(),
+      ]);
+      unsub = subscribeToRealtime();
+      setLoading(false);
+    })();
 
-      if (!data) {
-        console.log('Nenhum contato retornado');
-        return;
-      }
+    return () => {
+      if (unsub) unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendant?.id, company?.id, company?.api_key]);
 
-      console.log('Contatos (antes filtro):', data.length);
+  useEffect(() => {
+    scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
-      // Filtrar no client-side baseado no departamento e setor do atendente
-      let filteredContacts = data;
-      if (attendant?.department_id || attendant?.sector_id) {
-        filteredContacts = data.filter((contact) => {
-          // Se o atendente tem departamento, o contato DEVE ter o mesmo departamento
-          const deptMatch = !attendant?.department_id ||
-                           contact.department_id === attendant.department_id;
+  // ======= FILTRO CORRETO (não bloqueia NULL) =======
+  function matchAttendantScope(item: { department_id?: string | null; sector_id?: string | null }) {
+    const attDept = attendant?.department_id || null;
+    const attSector = attendant?.sector_id || null;
 
-          // Se o atendente tem setor, o contato DEVE ter o mesmo setor
-          const sectorMatch = !attendant?.sector_id ||
-                             contact.sector_id === attendant.sector_id;
+    // regra: se atendente tem dept/setor, ele deve ver:
+    // - itens do mesmo dept/setor
+    // - OU itens ainda não atribuídos (NULL)
+    const deptOk =
+      !attDept || item.department_id === attDept || item.department_id === null || item.department_id === undefined;
 
-          // Deve satisfazer AMBAS as condições
-          return deptMatch && sectorMatch;
-        });
-      }
+    const sectorOk =
+      !attSector || item.sector_id === attSector || item.sector_id === null || item.sector_id === undefined;
 
-      console.log('Contatos (após filtro):', filteredContacts.length);
-
-      // Buscar tags para cada contato
-      const contactsWithTags = await Promise.all(
-        filteredContacts.map(async (contact) => {
-          const { data: contactTags } = await supabase
-            .from('contact_tags')
-            .select('tag_id')
-            .eq('contact_id', contact.id);
-
-          return {
-            ...contact,
-            tag_ids: contactTags?.map(ct => ct.tag_id) || []
-          };
-        })
-      );
-
-      console.log('✓ Salvando', contactsWithTags.length, 'contacts no state');
-      setContactsDB(contactsWithTags);
-    } catch (error) {
-      console.error('❌ ERRO ao carregar contatos:', error);
-    }
-  };
+    return deptOk && sectorOk;
+  }
 
   const fetchSector = async () => {
     if (!attendant?.sector_id) return;
-
     try {
       const { data, error } = await supabase
         .from('sectors')
@@ -201,17 +209,14 @@ export default function AttendantDashboard() {
         .eq('id', attendant.sector_id)
         .maybeSingle();
 
-      if (!error && data) {
-        setSector(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar setor:', error);
+      if (!error && data) setSector(data);
+    } catch (e) {
+      console.error('Erro ao carregar setor:', e);
     }
   };
 
   const fetchDepartments = async () => {
     if (!company?.id) return;
-
     try {
       const { data, error } = await supabase
         .from('departments')
@@ -219,17 +224,14 @@ export default function AttendantDashboard() {
         .eq('company_id', company.id)
         .order('name');
 
-      if (!error && data) {
-        setDepartments(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar departamentos:', error);
+      if (!error && data) setDepartments(data);
+    } catch (e) {
+      console.error('Erro ao carregar departamentos:', e);
     }
   };
 
   const fetchSectors = async () => {
     if (!company?.id) return;
-
     try {
       const { data, error } = await supabase
         .from('sectors')
@@ -237,17 +239,14 @@ export default function AttendantDashboard() {
         .eq('company_id', company.id)
         .order('name');
 
-      if (!error && data) {
-        setSectors(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar setores:', error);
+      if (!error && data) setSectors(data);
+    } catch (e) {
+      console.error('Erro ao carregar setores:', e);
     }
   };
 
   const fetchTags = async () => {
     if (!company?.id) return;
-
     try {
       const { data, error } = await supabase
         .from('tags')
@@ -255,193 +254,94 @@ export default function AttendantDashboard() {
         .eq('company_id', company.id)
         .order('name');
 
-      if (!error && data) {
-        setTags(data);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar tags:', error);
+      if (!error && data) setTags(data);
+    } catch (e) {
+      console.error('Erro ao carregar tags:', e);
     }
   };
 
-  const handleUpdateContactInfo = async () => {
-    if (!modalContactPhone || !company?.id) return;
+  const fetchContacts = async () => {
+    if (!company?.id) return;
 
     try {
-      // Buscar tags atuais do contato para verificar se houve mudança
-      const currentContact = contactsDB.find(c => c.phone_number === modalContactPhone);
-      const currentTags = currentContact?.tag_ids || [];
-
-      const tagsChanged =
-        selectedTags.length !== currentTags.length ||
-        !selectedTags.every(tag => currentTags.includes(tag));
-
-      if (!tagsChanged) {
-        setToastMessage('Nenhuma alteração foi feita');
-        setShowToast(true);
-        return;
-      }
-
-      // Buscar o ID do contato no banco
-      const { data: contactData } = await supabase
+      const { data, error } = await supabase
         .from('contacts')
-        .select('id')
+        .select('*')
         .eq('company_id', company.id)
-        .eq('phone_number', modalContactPhone)
-        .maybeSingle();
+        .order('last_message_time', { ascending: false });
 
-      if (!contactData) {
-        throw new Error('Contato não encontrado');
-      }
+      if (error) throw error;
 
-      const contactId = contactData.id;
+      const raw = (data || []) as ContactDB[];
+      const filtered = raw.filter(matchAttendantScope);
 
-      // Remover tags antigas
-      await supabase
-        .from('contact_tags')
-        .delete()
-        .eq('contact_id', contactId);
+      // tags por contato
+      const withTags = await Promise.all(
+        filtered.map(async (c) => {
+          const { data: contactTags } = await supabase.from('contact_tags').select('tag_id').eq('contact_id', c.id);
+          return { ...c, tag_ids: contactTags?.map((ct: any) => ct.tag_id) || [] };
+        })
+      );
 
-      // Adicionar novas tags (máximo 5) se houver
-      if (selectedTags.length > 0) {
-        const tagsToInsert = selectedTags.slice(0, 5).map(tagId => ({
-          contact_id: contactId,
-          tag_id: tagId
-        }));
-
-        const { error: tagsError } = await supabase
-          .from('contact_tags')
-          .insert(tagsToInsert);
-
-        if (tagsError) throw tagsError;
-      }
-
-      setToastMessage('Tags atualizadas com sucesso!');
-      setShowToast(true);
-      setShowTagsModal(false);
-      setModalContactPhone(null);
-      setSelectedTags([]);
-      fetchContacts();
-    } catch (error) {
-      console.error('Erro ao atualizar tags:', error);
-      setToastMessage('Erro ao atualizar tags');
-      setShowToast(true);
+      setContactsDB(withTags);
+    } catch (e) {
+      console.error('Erro ao buscar contatos:', e);
     }
+  };
+
+  const getMessageTimestamp = (msg: Message): number => {
+    if (msg.timestamp && !isNaN(Number(msg.timestamp))) return Number(msg.timestamp) * 1000;
+    if (msg.date_time) {
+      const t = new Date(msg.date_time).getTime();
+      if (!isNaN(t)) return t;
+    }
+    if (msg.created_at) {
+      const t = new Date(msg.created_at).getTime();
+      if (!isNaN(t)) return t;
+    }
+    return 0;
   };
 
   const fetchMessages = async () => {
-    console.log('=== INÍCIO FETCH MESSAGES ===');
-    console.log('Company:', { id: company?.id, name: company?.name, api_key: company?.api_key });
-    console.log('Attendant:', {
-      id: attendant?.id,
-      name: attendant?.name,
-      dept: attendant?.department_id,
-      sector: attendant?.sector_id
-    });
-
     if (!company?.api_key) {
-      console.log('ABORTAR: company.api_key não existe');
-      setLoading(false);
+      setMessages([]);
       return;
     }
 
-    setLoading(true);
     try {
-      console.log('Buscando mensagens com apikey_instancia:', company.api_key);
-
-      // Buscar TODAS as mensagens da empresa
-      const [receivedResult, sentResult] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('*')
-          .eq('apikey_instancia', company.api_key),
-        supabase
-          .from('sent_messages')
-          .select('*')
-          .eq('apikey_instancia', company.api_key)
+      // busca mensagens por apikey_instancia (sem travar por telefone aqui)
+      const [received, sent] = await Promise.all([
+        supabase.from('messages').select('*').eq('apikey_instancia', company.api_key),
+        supabase.from('sent_messages').select('*').eq('apikey_instancia', company.api_key),
       ]);
 
-      if (receivedResult.error) {
-        console.error('Erro ao buscar mensagens recebidas:', receivedResult.error);
-        throw receivedResult.error;
-      }
+      if (received.error) throw received.error;
+      if (sent.error) throw sent.error;
 
-      if (sentResult.error) {
-        console.error('Erro ao buscar mensagens enviadas:', sentResult.error);
-        throw sentResult.error;
-      }
+      let all: Message[] = [...(received.data || []), ...(sent.data || [])];
 
-      console.log('Mensagens recebidas (antes filtro):', receivedResult.data?.length || 0);
-      console.log('Mensagens enviadas (antes filtro):', sentResult.data?.length || 0);
+      // filtro correto do atendente (não bloqueia NULL)
+      all = all.filter(matchAttendantScope);
 
-      // Combinar todas as mensagens
-      let allMessages = [
-        ...(receivedResult.data || []),
-        ...(sentResult.data || [])
-      ];
+      // ordenar por timestamp
+      all.sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
 
-      console.log('Total antes do filtro:', allMessages.length);
-
-      // Mostrar amostra dos dados para debug
-      if (allMessages.length > 0) {
-        console.log('Exemplo de mensagem:', {
-          numero: allMessages[0].numero,
-          department_id: allMessages[0].department_id,
-          sector_id: allMessages[0].sector_id,
-          message: allMessages[0].message?.substring(0, 50)
-        });
-      }
-
-      // Filtrar no client-side baseado no departamento e setor do atendente
-      if (attendant?.department_id || attendant?.sector_id) {
-        const beforeFilter = allMessages.length;
-        allMessages = allMessages.filter((msg) => {
-          // Se o atendente tem departamento, a mensagem DEVE ter o mesmo departamento
-          const deptMatch = !attendant?.department_id ||
-                           msg.department_id === attendant.department_id;
-
-          // Se o atendente tem setor, a mensagem DEVE ter o mesmo setor
-          const sectorMatch = !attendant?.sector_id ||
-                             msg.sector_id === attendant.sector_id;
-
-          // Deve satisfazer AMBAS as condições
-          return deptMatch && sectorMatch;
-        });
-        console.log(`Filtro aplicado: ${beforeFilter} → ${allMessages.length} mensagens`);
-      } else {
-        console.log('Sem filtro (atendente sem dept/sector)');
-      }
-
-      console.log('Total de mensagens (após filtro):', allMessages.length);
-
-      // Ordenar por timestamp
-      allMessages.sort((a, b) => {
-        return getMessageTimestamp(a) - getMessageTimestamp(b);
-      });
-
-      console.log('✓ Salvando', allMessages.length, 'mensagens no state');
-      setMessages(allMessages);
-      setTimeout(scrollToBottom, 100);
-    } catch (error) {
-      console.error('❌ ERRO ao carregar mensagens:', error);
-    } finally {
-      console.log('=== FIM FETCH MESSAGES ===');
-      setLoading(false);
+      setMessages(all);
+      setTimeout(scrollToBottom, 50);
+    } catch (e) {
+      console.error('Erro ao carregar mensagens:', e);
+      setMessages([]);
     }
   };
 
-  const subscribeToMessages = () => {
+  const subscribeToRealtime = () => {
     if (!company?.api_key || !company?.id) return;
 
     const channel = supabase
-      .channel('attendant-messages')
+      .channel('attendant-realtime')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'messages',
-          filter: `apikey_instancia=eq.${company.api_key}`,
-        },
+        { event: '*', schema: 'public', table: 'messages', filter: `apikey_instancia=eq.${company.api_key}` },
         () => {
           fetchMessages();
           fetchContacts();
@@ -449,12 +349,7 @@ export default function AttendantDashboard() {
       )
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sent_messages',
-          filter: `apikey_instancia=eq.${company.api_key}`,
-        },
+        { event: '*', schema: 'public', table: 'sent_messages', filter: `apikey_instancia=eq.${company.api_key}` },
         () => {
           fetchMessages();
           fetchContacts();
@@ -462,12 +357,7 @@ export default function AttendantDashboard() {
       )
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'contacts',
-          filter: `company_id=eq.${company.id}`,
-        },
+        { event: '*', schema: 'public', table: 'contacts', filter: `company_id=eq.${company.id}` },
         () => {
           fetchContacts();
         }
@@ -491,101 +381,269 @@ export default function AttendantDashboard() {
     });
   };
 
+  // ======= AGRUPA CONTATOS PELAS MENSAGENS (normalizado) =======
+  const contacts: Contact[] = useMemo(() => {
+    const map = new Map<string, Contact>();
+
+    for (const msg of messages) {
+      const phone = normalizePhone(msg.numero || msg.sender || '');
+      if (!phone) continue;
+
+      if (!map.has(phone)) {
+        const contactDB = contactsDB.find((c) => normalizePhone(c.phone_number) === phone);
+
+        map.set(phone, {
+          phoneNumber: phone,
+          name: contactDB?.name || msg.pushname || phone,
+          lastMessage: '',
+          lastMessageTime: '',
+          unreadCount: 0,
+          messages: [],
+          department_id: contactDB?.department_id || undefined,
+          sector_id: contactDB?.sector_id || undefined,
+          tag_ids: contactDB?.tag_ids || [],
+          contact_db_id: contactDB?.id || undefined,
+        });
+      }
+
+      map.get(phone)!.messages.push(msg);
+    }
+
+    const arr = Array.from(map.values()).map((c) => {
+      c.messages.sort((a, b) => getMessageTimestamp(a) - getMessageTimestamp(b));
+      const last = c.messages[c.messages.length - 1];
+      c.lastMessage = last?.message || 'Mensagem';
+      c.lastMessageTime = safeISO(last?.date_time || last?.created_at || null);
+      c.name = (contactsDB.find((db) => normalizePhone(db.phone_number) === c.phoneNumber)?.name) || last?.pushname || c.phoneNumber;
+      return c;
+    });
+
+    arr.sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+    return arr;
+  }, [messages, contactsDB]);
+
+  const filteredContacts = useMemo(() => {
+    const s = searchTerm.toLowerCase().trim();
+    if (!s) return contacts;
+
+    return contacts.filter((c) => {
+      return (
+        c.name.toLowerCase().includes(s) ||
+        c.phoneNumber.toLowerCase().includes(s)
+      );
+    });
+  }, [contacts, searchTerm]);
+
+  const selectedContactData = selectedContact ? contacts.find((c) => c.phoneNumber === selectedContact) : null;
+
+  useEffect(() => {
+    if (!selectedContact && contacts.length > 0) setSelectedContact(contacts[0].phoneNumber);
+  }, [contacts, selectedContact]);
+
+  const formatTime = (timestamp: string | null, createdAt: string) => {
+    const base = timestamp || createdAt;
+    if (!base) return '';
+    try {
+      const d = new Date(base);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+      const num = parseInt(timestamp || '0', 10);
+      if (!isNaN(num) && num > 0) {
+        return new Date(num * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  };
+
+  const formatDateLabel = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const today = new Date();
+      const y = new Date();
+      y.setDate(today.getDate() - 1);
+
+      if (d.toDateString() === today.toDateString()) return 'Hoje';
+      if (d.toDateString() === y.toDateString()) return 'Ontem';
+
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+      return '';
+    }
+  };
+
+  const groupMessagesByDate = (msgs: Message[]) => {
+    const groups: Record<string, Message[]> = {};
+    for (const m of msgs) {
+      const t = getMessageTimestamp(m);
+      const iso = t ? new Date(t).toISOString() : (m.created_at || new Date().toISOString());
+      const label = formatDateLabel(iso);
+
+      if (!groups[label]) groups[label] = [];
+      groups[label].push(m);
+    }
+    return groups;
+  };
+
+  // ======= ATUALIZAR TAGS DO CONTATO =======
+  const handleUpdateContactInfo = async () => {
+    if (!modalContactPhone || !company?.id) return;
+
+    try {
+      const contactDB = contactsDB.find((c) => normalizePhone(c.phone_number) === modalContactPhone);
+      if (!contactDB) throw new Error('Contato não encontrado no DB');
+
+      const currentTags = contactDB.tag_ids || [];
+      const changed =
+        selectedTags.length !== currentTags.length || !selectedTags.every((t) => currentTags.includes(t));
+
+      if (!changed) {
+        setToastMessage('Nenhuma alteração foi feita');
+        setShowToast(true);
+        return;
+      }
+
+      // remover
+      await supabase.from('contact_tags').delete().eq('contact_id', contactDB.id);
+
+      // inserir
+      if (selectedTags.length > 0) {
+        const payload = selectedTags.slice(0, 5).map((tagId) => ({ contact_id: contactDB.id, tag_id: tagId }));
+        const { error } = await supabase.from('contact_tags').insert(payload);
+        if (error) throw error;
+      }
+
+      setToastMessage('Tags atualizadas com sucesso!');
+      setShowToast(true);
+      setShowTagsModal(false);
+      setModalContactPhone(null);
+      setSelectedTags([]);
+
+      fetchContacts();
+    } catch (e) {
+      console.error('Erro ao atualizar tags:', e);
+      setToastMessage('Erro ao atualizar tags');
+      setShowToast(true);
+    }
+  };
+
+  // ======= ENVIO DE MENSAGEM + WEBHOOK COM NOME DO ATENDENTE =======
   const sendMessage = async (messageData: Partial<Message>) => {
-    if (!company || !selectedContact) return;
+    if (!company || !company.api_key || !selectedContact) return;
 
     setSending(true);
     try {
-      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const generatedIdMessage = `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
-      const { data: existingMessages } = await supabase
+      // tenta pegar instancia/dept/sector a partir do último registro existente
+      const { data: lastMsg } = await supabase
         .from('messages')
         .select('instancia, department_id, sector_id, tag_id')
-        .eq('numero', selectedContact)
         .eq('apikey_instancia', company.api_key)
+        .eq('numero', selectedContact)
         .order('created_at', { ascending: false })
         .limit(1);
 
-      const instanciaValue = existingMessages?.[0]?.instancia || company.name;
-      const departmentId = existingMessages?.[0]?.department_id || attendant?.department_id || null;
-      const sectorId = existingMessages?.[0]?.sector_id || attendant?.sector_id || null;
-      const tagId = existingMessages?.[0]?.tag_id || null;
+      const instanciaValue = lastMsg?.[0]?.instancia || company.name;
+      const departmentId = lastMsg?.[0]?.department_id ?? attendant?.department_id ?? null;
+      const sectorId = lastMsg?.[0]?.sector_id ?? attendant?.sector_id ?? null;
+      const tagId = lastMsg?.[0]?.tag_id ?? null;
 
-      const newMessage = {
+      const nowIso = new Date().toISOString();
+
+      const rowToInsert: Message = {
         numero: selectedContact,
         sender: selectedContact,
         'minha?': 'true',
         pushname: attendant?.name || company.name,
         apikey_instancia: company.api_key,
-        date_time: new Date().toISOString(),
+        date_time: nowIso,
         instancia: instanciaValue,
         idmessage: generatedIdMessage,
         company_id: company.id,
         department_id: departmentId,
         sector_id: sectorId,
         tag_id: tagId,
-        ...messageData,
+        created_at: nowIso,
+        tipomessage: messageData.tipomessage || 'conversation',
+        message: messageData.message || '',
+        mimetype: messageData.mimetype || null,
+        base64: messageData.base64 || null,
+        urlpdf: messageData.urlpdf || null,
+        urlimagem: messageData.urlimagem || null,
+        caption: messageData.caption || null,
       };
 
-      const { error } = await supabase
-        .from('sent_messages')
-        .insert([newMessage]);
+      // salva no banco como "sent_messages"
+      const { error } = await supabase.from('sent_messages').insert([rowToInsert]);
+      if (error) throw error;
 
-      if (error) {
-        console.error('Erro ao enviar mensagem:', error);
-        alert('Erro ao enviar mensagem');
-        return;
+      // formatação do conteúdo quando for atendente (mantive sua regra)
+      let formattedMessage = rowToInsert.message || '';
+      if (attendant?.function && rowToInsert.tipomessage === 'conversation') {
+        formattedMessage = `(${attendant.function}) - ${attendant.name}\n${formattedMessage}`;
       }
 
+      let formattedCaption = rowToInsert.caption || null;
+      if (attendant?.function && formattedCaption && rowToInsert.tipomessage !== 'conversation') {
+        formattedCaption = `(${attendant.function}) - ${attendant.name}\n${formattedCaption}`;
+      }
+
+      // ✅ AQUI: JSON enviado para o n8n com nome do atendente
+      const webhookPayload = {
+        numero: selectedContact,
+        message: formattedMessage,
+        tipomessage: rowToInsert.tipomessage || 'conversation',
+        base64: rowToInsert.base64 || null,
+        urlimagem: rowToInsert.urlimagem || null,
+        urlpdf: rowToInsert.urlpdf || null,
+        caption: formattedCaption,
+        idmessage: generatedIdMessage,
+        pushname: attendant?.name || company.name,
+        department_name: departments.find(d => d.id === attendant?.department_id)?.name || null,
+        sector_name: sectors.find(s => s.id === attendant?.sector_id)?.name || null,
+        timestamp: nowIso,
+        instancia: instanciaValue,
+        apikey_instancia: company.api_key,
+      
+        // ✅ quem enviou
+        sender_type: 'attendant',
+        attendant_id: attendant?.id || null,
+        attendant_name: attendant?.name || null,
+        attendant_function: attendant?.function || attendant?.role || 'Atendente',
+      
+        // ✅ contexto da empresa
+        company_id: company.id,
+        company_name: company.name,
+      
+        // (opcional mas recomendado)
+        department_id: attendant?.department_id || null,
+        sector_id: attendant?.sector_id || null,
+      };
+
       try {
-        const timestamp = new Date().toISOString();
-
-        // Formatar mensagem quando for atendente: (Função) - (Nome)\nMensagem
-        let formattedMessage = messageData.message || '';
-        if (attendant && attendant.function && messageData.tipomessage === 'conversation') {
-          formattedMessage = `(${attendant.function}) - ${attendant.name}\n${formattedMessage}`;
-        }
-
-        // Formatar caption para imagens/documentos quando for atendente
-        let formattedCaption = messageData.caption || null;
-        if (attendant && attendant.function && formattedCaption && messageData.tipomessage !== 'conversation') {
-          formattedCaption = `(${attendant.function}) - ${attendant.name}\n${formattedCaption}`;
-        }
-
-        const webhookPayload = {
-          numero: selectedContact,
-          message: formattedMessage,
-          tipomessage: messageData.tipomessage || 'conversation',
-          base64: messageData.base64 || null,
-          urlimagem: messageData.urlimagem || null,
-          urlpdf: messageData.urlpdf || null,
-          caption: formattedCaption,
-          idmessage: generatedIdMessage,
-          pushname: attendant?.name || company.name,
-          timestamp: timestamp,
-          instancia: instanciaValue,
-          apikey_instancia: company.api_key,
-        };
-
-        const webhookResponse = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
+        const res = await fetch('https://n8n.nexladesenvolvimento.com.br/webhook/EnvioMensagemOPS', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(webhookPayload),
         });
 
-        if (!webhookResponse.ok) {
-          console.error('Erro ao enviar para webhook:', webhookResponse.status);
+        if (!res.ok) {
+          console.error('Webhook falhou:', res.status);
         }
-      } catch (webhookError) {
-        console.error('Erro ao chamar webhook:', webhookError);
+      } catch (e) {
+        console.error('Erro ao chamar webhook:', e);
       }
 
       setMessageText('');
-      setTimeout(scrollToBottom, 100);
-    } catch (err) {
-      console.error('Erro ao enviar mensagem:', err);
+      setTimeout(scrollToBottom, 50);
+      // opcional: otimista
+      fetchMessages();
+      fetchContacts();
+    } catch (e) {
+      console.error('Erro ao enviar mensagem:', e);
       alert('Erro ao enviar mensagem');
     } finally {
       setSending(false);
@@ -606,14 +664,12 @@ export default function AttendantDashboard() {
         const messageData: Partial<Message> = {
           tipomessage: isImage ? 'imageMessage' : isAudio ? 'audioMessage' : 'documentMessage',
           mimetype: selectedFile.type,
-          base64: base64,
+          base64,
         };
 
         if (isImage) {
           messageData.message = imageCaption || messageText.trim() || 'Imagem';
-          if (imageCaption) {
-            messageData.caption = imageCaption;
-          }
+          if (imageCaption) messageData.caption = imageCaption;
         } else if (isAudio) {
           messageData.message = messageText.trim() || 'Áudio';
         } else {
@@ -630,9 +686,6 @@ export default function AttendantDashboard() {
           tipomessage: 'conversation',
         });
       }
-    } catch (err) {
-      console.error('Erro ao enviar:', err);
-      alert('Erro ao enviar mensagem');
     } finally {
       setSending(false);
     }
@@ -643,9 +696,7 @@ export default function AttendantDashboard() {
     if (file) {
       setSelectedFile(file);
       const reader = new FileReader();
-      reader.onload = () => {
-        setFilePreview(reader.result as string);
-      };
+      reader.onload = () => setFilePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
     e.target.value = '';
@@ -666,183 +717,6 @@ export default function AttendantDashboard() {
     setImageCaption('');
   };
 
-  const formatTime = (timestamp: string | null, created_at: string) => {
-    const dateStr = timestamp || created_at;
-    if (!dateStr) return '';
-
-    try {
-      const date = new Date(parseInt(timestamp || '0') || created_at);
-      return date.toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      const date = new Date(dateStr);
-      const today = new Date();
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (date.toDateString() === today.toDateString()) {
-        return 'Hoje';
-      } else if (date.toDateString() === yesterday.toDateString()) {
-        return 'Ontem';
-      } else {
-        return date.toLocaleDateString('pt-BR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        });
-      }
-    } catch {
-      return '';
-    }
-  };
-
-  const getContactId = (msg: Message): string => {
-    // Normalizar: pegar sempre o 'numero' e remover @s.whatsapp.net
-    const rawNumber = msg.numero || msg.sender || 'Desconhecido';
-    const normalized = rawNumber.includes('@') ? rawNumber.split('@')[0] : rawNumber;
-    return normalized;
-  };
-
-  const getPhoneNumber = (contactId: string): string => {
-    // Já normalizado pela getContactId
-    if (contactId.includes('@')) {
-      return contactId.split('@')[0];
-    }
-    return contactId;
-  };
-
-  const getContactName = (msg: Message): string => {
-    return msg.pushname || getPhoneNumber(getContactId(msg));
-  };
-
-  const getMessageTimestamp = (msg: Message): number => {
-    if (msg.timestamp && !isNaN(Number(msg.timestamp))) {
-      return Number(msg.timestamp) * 1000;
-    }
-    if (msg.date_time) {
-      return new Date(msg.date_time).getTime();
-    }
-    if (msg.created_at) {
-      return new Date(msg.created_at).getTime();
-    }
-    return 0;
-  };
-
-  const groupMessagesByContact = (): Contact[] => {
-    console.log('Agrupando mensagens por contato. Total de mensagens:', messages.length);
-    console.log('ContactsDB disponíveis:', contactsDB.length);
-
-    if (contactsDB.length > 0) {
-      console.log('Exemplo contactDB phone_number:', contactsDB[0].phone_number);
-    }
-
-    const contactsMap: { [key: string]: Contact } = {};
-
-    messages.forEach((msg, idx) => {
-      const contactId = getContactId(msg); // já normalizado
-
-      if (idx < 2) {
-        console.log(`Mensagem ${idx} contactId normalizado:`, contactId, 'numero raw:', msg.numero);
-      }
-
-      if (!contactsMap[contactId]) {
-        // Buscar informações do contato na tabela contacts
-        // Normalizar o phone_number do contactDB para comparar
-        const contactDB = contactsDB.find(c => {
-          const normalizedPhone = c.phone_number.includes('@')
-            ? c.phone_number.split('@')[0]
-            : c.phone_number;
-          return normalizedPhone === contactId;
-        });
-
-        if (idx < 2) {
-          console.log(`ContactDB encontrado para ${contactId}:`, !!contactDB, contactDB?.name);
-        }
-
-        contactsMap[contactId] = {
-          phoneNumber: contactId,
-          name: getContactName(msg),
-          lastMessage: '',
-          lastMessageTime: '',
-          unreadCount: 0,
-          messages: [],
-          department_id: contactDB?.department_id || undefined,
-          sector_id: contactDB?.sector_id || undefined,
-          tag_ids: contactDB?.tag_ids || [],
-          contact_db_id: contactDB?.id || undefined,
-        };
-      }
-
-      contactsMap[contactId].messages.push(msg);
-    });
-
-    const contacts = Object.values(contactsMap).map((contact) => {
-      contact.messages.sort((a, b) => {
-        return getMessageTimestamp(a) - getMessageTimestamp(b);
-      });
-
-      const lastMsg = contact.messages[contact.messages.length - 1];
-      contact.lastMessage = lastMsg.message || 'Mensagem';
-
-      const lastMsgTime = getMessageTimestamp(lastMsg);
-      contact.lastMessageTime = lastMsgTime > 0 ? new Date(lastMsgTime).toISOString() : '';
-      contact.name = getContactName(lastMsg);
-
-      return contact;
-    });
-
-    contacts.sort((a, b) => {
-      const dateA = new Date(a.lastMessageTime).getTime();
-      const dateB = new Date(b.lastMessageTime).getTime();
-      return dateB - dateA;
-    });
-
-    console.log('Contatos agrupados:', contacts.length);
-    return contacts;
-  };
-
-  const contacts = groupMessagesByContact();
-
-  const filteredContacts = contacts.filter((contact) => {
-    const searchLower = searchTerm.toLowerCase();
-    const displayPhone = getPhoneNumber(contact.phoneNumber);
-    return (
-      contact.name.toLowerCase().includes(searchLower) ||
-      displayPhone.toLowerCase().includes(searchLower) ||
-      contact.phoneNumber.toLowerCase().includes(searchLower)
-    );
-  });
-
-  const selectedContactData = selectedContact
-    ? contacts.find((c) => c.phoneNumber === selectedContact)
-    : null;
-
-  useEffect(() => {
-    if (!selectedContact && contacts.length > 0) {
-      setSelectedContact(contacts[0].phoneNumber);
-    }
-  }, [contacts.length, selectedContact]);
-
-  const groupMessagesByDate = (msgs: Message[]) => {
-    const groups: { [key: string]: Message[] } = {};
-    msgs.forEach((msg) => {
-      const date = formatDate(msg.created_at);
-      if (!groups[date]) {
-        groups[date] = [];
-      }
-      groups[date].push(msg);
-    });
-    return groups;
-  };
-
   if (loading) {
     return (
       <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100">
@@ -861,16 +735,11 @@ export default function AttendantDashboard() {
 
   return (
     <div className="h-screen flex bg-gradient-to-br from-slate-50 to-gray-100 overflow-hidden">
-      {showToast && (
-        <Toast
-          message={toastMessage}
-          onClose={() => setShowToast(false)}
-        />
-      )}
+      {showToast && <Toast message={toastMessage} onClose={() => setShowToast(false)} />}
+
+      {/* SIDEBAR */}
       <div
-        className={`${
-          sidebarOpen ? 'flex' : 'hidden'
-        } md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
+        className={`${sidebarOpen ? 'flex' : 'hidden'} md:flex w-full md:w-[380px] bg-white/70 backdrop-blur-xl border-r border-gray-200/50 flex-col shadow-lg`}
       >
         <header className="bg-white/50 backdrop-blur-sm px-6 py-5 flex items-center justify-between border-b border-gray-200/50">
           <div className="flex items-center gap-3">
@@ -921,9 +790,7 @@ export default function AttendantDashboard() {
                   key={contact.phoneNumber}
                   onClick={() => {
                     setSelectedContact(contact.phoneNumber);
-                    if (window.innerWidth < 768) {
-                      setSidebarOpen(false);
-                    }
+                    if (window.innerWidth < 768) setSidebarOpen(false);
                   }}
                   className={`w-full px-4 py-3.5 flex items-center gap-3 rounded-xl transition-all ${
                     selectedContact === contact.phoneNumber
@@ -934,6 +801,7 @@ export default function AttendantDashboard() {
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md">
                     <User className="w-6 h-6 text-white" />
                   </div>
+
                   <div className="flex-1 text-left overflow-hidden">
                     <div className="flex items-center justify-between mb-1">
                       <h3 className="text-gray-900 font-semibold text-sm truncate">{contact.name}</h3>
@@ -941,6 +809,7 @@ export default function AttendantDashboard() {
                         {formatTime(contact.lastMessageTime, contact.lastMessageTime)}
                       </span>
                     </div>
+
                     <div className="flex items-center justify-between">
                       <p className="text-gray-500 text-xs truncate flex-1">{contact.lastMessage}</p>
                       {contact.unreadCount > 0 && (
@@ -949,18 +818,19 @@ export default function AttendantDashboard() {
                         </div>
                       )}
                     </div>
+
                     {contact.tag_ids && contact.tag_ids.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {contact.tag_ids.map((tagId) => {
-                          const tag = tags.find(t => t.id === tagId);
-                          return tag ? (
+                          const t = tags.find((x) => x.id === tagId);
+                          return t ? (
                             <span
                               key={tagId}
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-white"
-                              style={{ backgroundColor: tag.color }}
+                              style={{ backgroundColor: t.color }}
                             >
                               <Tag className="w-2.5 h-2.5" />
-                              {tag.name}
+                              {t.name}
                             </span>
                           ) : null;
                         })}
@@ -974,6 +844,7 @@ export default function AttendantDashboard() {
         </div>
       </div>
 
+      {/* CHAT */}
       <div className={`flex-1 flex-col ${sidebarOpen ? 'hidden md:flex' : 'flex'}`}>
         {selectedContactData ? (
           <>
@@ -985,38 +856,38 @@ export default function AttendantDashboard() {
                 >
                   <Menu className="w-5 h-5" />
                 </button>
+
                 <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-md">
                   <User className="w-6 h-6 text-white" />
                 </div>
+
                 <div className="flex-1">
                   <h1 className="text-gray-900 font-bold text-base tracking-tight">{selectedContactData.name}</h1>
-                  <p className="text-gray-500 text-xs mb-1">{getPhoneNumber(selectedContactData.phoneNumber)}</p>
+                  <p className="text-gray-500 text-xs mb-1">{selectedContactData.phoneNumber}</p>
+
                   <div className="flex flex-wrap gap-2">
-                    {selectedContactData.tag_ids && selectedContactData.tag_ids.length > 0 && (
-                      <>
-                        {selectedContactData.tag_ids.map((tagId) => {
-                          const tag = tags.find(t => t.id === tagId);
-                          return tag ? (
-                            <span
-                              key={tagId}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                              style={{ backgroundColor: tag.color }}
-                            >
-                              <Tag className="w-3 h-3" />
-                              {tag.name}
-                            </span>
-                          ) : null;
-                        })}
-                      </>
-                    )}
+                    {selectedContactData.tag_ids?.map((tagId) => {
+                      const t = tags.find((x) => x.id === tagId);
+                      return t ? (
+                        <span
+                          key={tagId}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                          style={{ backgroundColor: t.color }}
+                        >
+                          <Tag className="w-3 h-3" />
+                          {t.name}
+                        </span>
+                      ) : null;
+                    })}
                   </div>
                 </div>
               </div>
+
               <button
                 onClick={() => {
-                  const currentContact = contactsDB.find(c => c.phone_number === selectedContact);
-                  setSelectedTags(currentContact?.tag_ids || []);
-                  setModalContactPhone(selectedContact);
+                  const cdb = contactsDB.find((c) => normalizePhone(c.phone_number) === selectedContactData.phoneNumber);
+                  setSelectedTags(cdb?.tag_ids || []);
+                  setModalContactPhone(selectedContactData.phoneNumber);
                   setShowTagsModal(true);
                 }}
                 className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-gray-100/50 rounded-xl transition-all"
@@ -1035,55 +906,48 @@ export default function AttendantDashboard() {
                         <p className="text-[11px] text-gray-600 font-semibold tracking-wide">{date}</p>
                       </div>
                     </div>
+
                     <div className="space-y-3">
                       {msgs.map((msg) => {
-                        const isSentMessage = msg['minha?'] === 'true';
-                        const isFromCustomer = msg.numero && msg.numero.trim() !== '';
-
+                        const isSent = msg['minha?'] === 'true';
                         return (
-                          <div
-                            key={msg.id}
-                            className={`flex ${isSentMessage || !isFromCustomer ? 'justify-end' : 'justify-start'}`}
-                          >
+                          <div key={`${msg.id || msg.idmessage || Math.random()}`} className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}>
                             <div
                               className={`max-w-[70%] rounded-2xl ${
-                                isSentMessage || !isFromCustomer
+                                isSent
                                   ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-lg'
                                   : 'bg-white/80 backdrop-blur-sm text-gray-900 rounded-bl-md shadow-md border border-gray-200/50'
                               }`}
                             >
-                              {isFromCustomer && !isSentMessage && (
+                              {!isSent && (
                                 <div className="px-3.5 pt-2">
                                   <span className="text-sm font-semibold text-blue-600">
                                     {msg.pushname || msg.numero}
                                   </span>
                                 </div>
                               )}
+
                               {msg.tipomessage && msg.tipomessage !== 'text' && msg.tipomessage !== 'conversation' && (
                                 <span
                                   className={`inline-block mx-3 mt-2 px-2 py-1 text-xs font-medium rounded ${
-                                    isSentMessage || !isFromCustomer
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-blue-100 text-blue-700'
+                                    isSent ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
                                   }`}
                                 >
                                   {msg.tipomessage}
                                 </span>
                               )}
+
                               {msg.message && (
                                 <div className="px-3.5 py-2">
-                                  <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">
-                                    {msg.message}
-                                  </p>
+                                  <p className="text-[14px] leading-[1.4] whitespace-pre-wrap break-words">{msg.message}</p>
                                 </div>
                               )}
+
                               <div className="px-3.5 pb-1.5 flex items-center justify-end gap-1">
-                                <span className={`text-[10px] ${isSentMessage || !isFromCustomer ? 'text-blue-100' : 'text-gray-400'}`}>
+                                <span className={`text-[10px] ${isSent ? 'text-blue-100' : 'text-gray-400'}`}>
                                   {formatTime(msg.timestamp, msg.created_at)}
                                 </span>
-                                {(isSentMessage || !isFromCustomer) && (
-                                  <CheckCheck className="w-3.5 h-3.5 text-blue-50" />
-                                )}
+                                {isSent && <CheckCheck className="w-3.5 h-3.5 text-blue-50" />}
                               </div>
                             </div>
                           </div>
@@ -1096,6 +960,7 @@ export default function AttendantDashboard() {
               </div>
             </div>
 
+            {/* INPUT */}
             <div className="bg-white/70 backdrop-blur-xl px-6 py-4 border-t border-gray-200/50">
               {filePreview && (
                 <div className="mb-3 px-4 py-3 bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-xl">
@@ -1104,10 +969,7 @@ export default function AttendantDashboard() {
                     <div className="flex-1">
                       <p className="text-xs text-blue-600 mb-1 font-medium">Imagem selecionada</p>
                       <p className="text-xs text-gray-600">{selectedFile?.name}</p>
-                      <button
-                        onClick={clearSelectedFile}
-                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
-                      >
+                      <button onClick={clearSelectedFile} className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium">
                         Remover imagem
                       </button>
                     </div>
@@ -1134,10 +996,7 @@ export default function AttendantDashboard() {
                     <div className="flex-1">
                       <p className="text-xs text-gray-600 mb-1 font-medium">Arquivo selecionado</p>
                       <p className="text-xs text-gray-600">{selectedFile?.name}</p>
-                      <button
-                        onClick={clearSelectedFile}
-                        className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium"
-                      >
+                      <button onClick={clearSelectedFile} className="text-xs text-red-500 hover:text-red-700 mt-2 font-medium">
                         Remover arquivo
                       </button>
                     </div>
@@ -1146,20 +1005,8 @@ export default function AttendantDashboard() {
               )}
 
               <div className="flex items-center gap-3">
-                <input
-                  type="file"
-                  ref={imageInputRef}
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={handleFileSelect} className="hidden" />
 
                 <button
                   onClick={() => imageInputRef.current?.click()}
@@ -1169,6 +1016,7 @@ export default function AttendantDashboard() {
                 >
                   <ImageIcon className="w-5 h-5" />
                 </button>
+
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending || !!selectedFile}
@@ -1183,7 +1031,7 @@ export default function AttendantDashboard() {
                     type="text"
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    onKeyPress={(e) => {
+                    onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
@@ -1201,11 +1049,7 @@ export default function AttendantDashboard() {
                   className="p-3.5 bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                   title="Enviar mensagem"
                 >
-                  {sending ? (
-                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5 text-white" />
-                  )}
+                  {sending ? <Loader2 className="w-5 h-5 text-white animate-spin" /> : <Send className="w-5 h-5 text-white" />}
                 </button>
               </div>
             </div>
@@ -1223,13 +1067,12 @@ export default function AttendantDashboard() {
         )}
       </div>
 
+      {/* MODAL TAGS */}
       {showTagsModal && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTagsModal(false);
-            }
+            if (e.target === e.currentTarget) setShowTagsModal(false);
           }}
         >
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative z-[101]">
@@ -1253,39 +1096,40 @@ export default function AttendantDashboard() {
                   <Tag className="w-4 h-4 text-blue-600" />
                   Tags (máx. 5)
                 </label>
+
                 <div className="space-y-2 max-h-60 overflow-y-auto bg-gray-50 border border-gray-200 rounded-xl p-3">
                   {tags.length === 0 ? (
                     <p className="text-sm text-gray-500 text-center py-3">Nenhuma tag disponível</p>
                   ) : (
-                    tags.map((tag) => (
+                    tags.map((t) => (
                       <label
-                        key={tag.id}
+                        key={t.id}
                         className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
-                          checked={selectedTags.includes(tag.id)}
+                          checked={selectedTags.includes(t.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              if (selectedTags.length < 5) {
-                                setSelectedTags([...selectedTags, tag.id]);
-                              } else {
+                              if (selectedTags.length < 5) setSelectedTags([...selectedTags, t.id]);
+                              else {
                                 setToastMessage('Você pode selecionar no máximo 5 tags');
                                 setShowToast(true);
                               }
                             } else {
-                              setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                              setSelectedTags(selectedTags.filter((id) => id !== t.id));
                             }
                           }}
                           className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          disabled={!selectedTags.includes(tag.id) && selectedTags.length >= 5}
+                          disabled={!selectedTags.includes(t.id) && selectedTags.length >= 5}
                         />
+
                         <span
                           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white flex-1"
-                          style={{ backgroundColor: tag.color }}
+                          style={{ backgroundColor: t.color }}
                         >
                           <Tag className="w-4 h-4" />
-                          {tag.name}
+                          {t.name}
                         </span>
                       </label>
                     ))
