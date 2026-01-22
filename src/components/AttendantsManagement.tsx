@@ -153,6 +153,16 @@ export default function AttendantsManagement() {
 
         if (error) throw error;
       } else {
+        const {
+          data: { session },
+          error: sessErr,
+        } = await supabase.auth.getSession();
+
+        if (sessErr) throw sessErr;
+        if (!session?.access_token) {
+          throw new Error("Sem token. Faça login novamente.");
+        }
+
         const { data, error } = await supabase.functions.invoke('create-attendant', {
           body: {
             name: formData.name,
@@ -164,6 +174,9 @@ export default function AttendantsManagement() {
             department_id: formData.department_id || null,
             sector_id: formData.sector_id || null,
             is_active: formData.is_active,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
           },
         });
 
